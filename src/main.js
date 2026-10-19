@@ -227,6 +227,7 @@ function enterRun(m) {
   cam.yawOff = 0;
   cam.init = false;
   showScreen(null);
+  sound.setScene('run');
   $('hud').classList.remove('hidden');
   $('big').className = 'big';
   buildTicks();
@@ -746,6 +747,7 @@ async function backToMenu() {
   raftView.deflate = 0;
   $('hud').classList.add('hidden');
   $('big').className = 'big';
+  sound.setScene('menu');
   showScreen('menu');
   history.replaceState(null, '', location.pathname);
   refreshScores();
@@ -942,6 +944,7 @@ async function boot() {
   G.haz = haz;
   G.scene = scene;
   G.renderer = renderer;
+  G.sound = sound;
   G.net = new SoloNet(G.profile);
   resize();
   buildMenu();

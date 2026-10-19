@@ -104,6 +104,73 @@ export class Sound {
     try { await ctx.audioWorklet.addModule(url); this.worklet = true; } catch (e) { console.warn('[audio] worklet failed', e); }
     this.startRiver();
     this.startMusic();
+    this.loadSamples();
+  }
+
+  async loadSamples() {
+    const base = new URL('../assets/audio/', import.meta.url);
+    try {
+      const man = await (await fetch(new URL('manifest.json', base))).json();
+      const get = async (file) => {
+        const r = await fetch(new URL(file, base));
+        return this.ctx.decodeAudioData(await r.arrayBuffer());
+      };
+      const jobs = [];
+      this.buf = {};
+      this.toots = [];
+      for (const t of man.toots) jobs.push(get(t.file).then((b) => this.toots.push(b)).catch(() => {}));
+      for (const [k, v] of Object.entries({ ...man.sfx, ...man.loops, ...man.music })) jobs.push(get(v.file).then((b) => { this.buf[k] = b; }).catch(() => {}));
+      await Promise.all(jobs);
+      this.samples = this.toots.length > 3;
+      this.startLoops();
+      this.startTracks();
+    } catch (e) { console.warn('[audio] samples unavailable, using synthesis', e); }
+  }
+
+  sample(name, { vol = 1, rate = 1, pan = 0, delay = 0, bus, loop = false } = {}) {
+    const b = typeof name === 'string' ? this.buf?.[name] : name;
+    if (!b) return null;
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = b;
+    src.loop = loop;
+    src.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    src.connect(g).connect(p).connect(bus || this.sfxBus);
+    src.start(ctx.currentTime + delay);
+    return { src, g };
+  }
+
+  startLoops() {
+    if (!this.buf.river) return;
+    this.loops = {};
+    for (const k of ['river', 'rapids', 'waterfall']) {
+      const l = this.sample(k, { vol: 0, loop: true });
+      if (l) this.loops[k] = l;
+    }
+    if (this.river) { this.river.g.gain.value = 0; this.river.hg.gain.value = 0; this.river.off = true; }
+  }
+
+  startTracks() {
+    if (!this.buf.music_run || !this.buf.music_menu) return;
+    clearInterval(this.musicTimer);
+    this.tracks = {
+      menu: this.sample('music_menu', { vol: 0, loop: true, bus: this.musicBus }),
+      run: this.sample('music_run', { vol: 0, loop: true, bus: this.musicBus }),
+    };
+    this.musicBus.gain.setTargetAtTime(this.musicOn ? 0.5 : 0, this.ctx.currentTime, 0.2);
+    this.setScene(this.scene || 'menu');
+  }
+
+  setScene(scene) {
+    this.scene = scene;
+    if (!this.tracks) return;
+    const t = this.ctx.currentTime;
+    this.tracks.menu.g.gain.setTargetAtTime(scene === 'menu' ? 0.9 : 0, t, 0.6);
+    this.tracks.run.g.gain.setTargetAtTime(scene === 'run' ? 0.75 : 0, t, 0.6);
   }
 
   setMuted(m) {
@@ -115,7 +182,7 @@ export class Sound {
   setMusic(on) {
     this.musicOn = on;
     try { localStorage.setItem('tt-music', on ? '1' : '0'); } catch {}
-    if (this.musicBus) this.musicBus.gain.setTargetAtTime(on ? 0.32 : 0, this.ctx.currentTime, 0.2);
+    if (this.musicBus) this.musicBus.gain.setTargetAtTime(on ? (this.tracks ? 0.5 : 0.32) : 0, this.ctx.currentTime, 0.2);
   }
 
   voice(id, pitch) {
@@ -135,7 +202,58 @@ export class Sound {
     return v;
   }
 
+  sampleVoice(id, pitch, on, pan, vol) {
+    const ctx = this.ctx;
+    this.svoices ||= new Map();
+    let v = this.svoices.get(id);
+    if (!v) {
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      const p = ctx.createStereoPanner();
+      g.connect(p).connect(this.sfxBus);
+      v = { g, p, on: false, src: null, old: null, endAt: 0, last: -1 };
+      this.svoices.set(id, v);
+    }
+    const t = ctx.currentTime;
+    if (on && !v.on) {
+      v.on = true;
+      if (v.old) { try { v.old.stop(); } catch {} v.old = null; }
+      v.g.gain.cancelScheduledValues(t);
+      v.g.gain.setValueAtTime(0.0001, t);
+      v.g.gain.linearRampToValueAtTime(0.95 * vol, t + 0.012);
+      this.nextToot(v, pitch, t);
+      this.sample('bubbles', { vol: 0.32, rate: 0.85 + Math.random() * 0.3, pan });
+    } else if (on && t > v.endAt - 0.04) {
+      this.nextToot(v, pitch, t);
+    } else if (!on && v.on) {
+      v.on = false;
+      v.g.gain.cancelScheduledValues(t);
+      v.g.gain.setValueAtTime(v.g.gain.value, t);
+      v.g.gain.setTargetAtTime(0, t + 0.07, 0.06);
+      v.old = v.src;
+      if (v.src) v.src.stop(t + 0.7);
+      v.src = null;
+    }
+    v.p.pan.setTargetAtTime(Math.max(-0.8, Math.min(0.8, pan)), t, 0.05);
+  }
+
+  nextToot(v, pitch, t) {
+    const n = this.toots.length;
+    let i = Math.floor(Math.random() * n);
+    if (n > 1 && i === v.last) i = (i + 1 + Math.floor(Math.random() * (n - 1))) % n;
+    v.last = i;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.toots[i];
+    src.playbackRate.value = (pitch / 110) * (0.93 + Math.random() * 0.14);
+    src.connect(v.g);
+    src.start(t);
+    if (v.src) { try { v.src.stop(t + 0.03); } catch {} }
+    v.src = src;
+    v.endAt = t + src.buffer.duration / src.playbackRate.value;
+  }
+
   setVoice(id, pitch, on, pan = 0, vol = 1, gasLeft = 1) {
+    if (this.samples) { this.sampleVoice(id, pitch, on, pan, vol); return; }
     const v = this.voice(id, pitch);
     if (!v) return;
     const t = this.ctx.currentTime;
@@ -154,6 +272,8 @@ export class Sound {
   }
 
   dropVoice(id) {
+    const sv = this.svoices?.get(id);
+    if (sv) { try { sv.src?.stop(); sv.old?.stop(); } catch {} sv.g.disconnect(); this.svoices.delete(id); }
     const v = this.voices.get(id);
     if (!v) return;
     v.node.disconnect(); v.g.disconnect(); v.pan.disconnect();
@@ -162,6 +282,7 @@ export class Sound {
 
   silenceAll() {
     for (const [id] of this.voices) this.setVoice(id, 100, false);
+    if (this.svoices) for (const [id] of this.svoices) this.sampleVoice(id, 100, false, 0, 1);
   }
 
   noise(t, dur, { type = 'bandpass', f0 = 1000, f1 = f0, q = 1, vol = 0.5, attack = 0.005, pan = 0, bus } = {}) {
@@ -208,6 +329,7 @@ export class Sound {
     const t = this.ctx.currentTime + 0.005;
     const pan = o.pan || 0;
     const v = o.vol ?? 1;
+    if (this.samples && this.playSample(name, o, pan, v)) return;
     switch (name) {
       case 'jump':
         this.tone(t, 0.16, { type: 'sine', f0: 260, f1: 620, vol: 0.18 * v, pan });
@@ -311,6 +433,41 @@ export class Sound {
     }
   }
 
+  playSample(name, o, pan, v) {
+    const S = (n, opt = {}) => this.sample(n, { pan, ...opt });
+    const r = (a, b) => a + Math.random() * (b - a);
+    switch (name) {
+      case 'bump': {
+        const m = Math.min(1.5, o.mag || 1);
+        S(`bump${1 + Math.floor(Math.random() * 3)}`, { vol: 0.75 * m * v, rate: r(0.8, 1.05) });
+        S('splash_mid', { vol: 0.45 * m * v, rate: r(0.9, 1.15) });
+        return true;
+      }
+      case 'boing': S('boing2', { vol: 0.8 * v, rate: r(0.9, 1.1) }); S('splash_mid', { vol: 0.3 * v }); return true;
+      case 'splash': S('splash_big', { vol: 1.8 * v, rate: r(0.92, 1.05) }); S('splash_mid', { vol: 0.8 * v, delay: 0.05 }); return true;
+      case 'pop': S('pop', { vol: 1.0 * v }); S('deflate', { vol: 0.8 * v, delay: 0.06 }); S('hiss', { vol: 0.4 * v, delay: 0.1 }); return true;
+      case 'knock': S('knock', { vol: 0.9 * v }); return true;
+      case 'bean': S('can', { vol: 0.8 * v }); S('powerup', { vol: 0.45 * v, delay: 0.12 }); return true;
+      case 'checkpoint': S('checkpoint', { vol: 0.9 * v }); return true;
+      case 'finish': S('finish', { vol: 1.0 * v }); S('checkpoint', { vol: 0.6 * v, delay: 1.4 }); return true;
+      case 'beep': S(o.go ? 'go' : 'tick', { vol: (o.go ? 0.8 : 0.55) * v }); return true;
+      case 'click': S('click', { vol: 0.6 * v }); return true;
+      case 'geyser': S('geyser', { vol: 0.7 * v, rate: r(0.95, 1.08) }); return true;
+      case 'wipe': S('sad', { vol: 0.55 * v }); return true;
+      case 'barrier': S('barrier', { vol: 0.6 * v, rate: r(0.9, 1.1) }); return true;
+      case 'blub': S('splash_dive', { vol: 0.7 * v, rate: r(0.95, 1.1) }); S('bubbles_small', { vol: 0.4 * v, delay: 0.08 }); return true;
+      case 'surface': S('splash_tiny', { vol: 0.7 * v, rate: r(0.95, 1.15) }); return true;
+      case 'bubble': {
+        const t = this.ctx.currentTime;
+        if (t - (this.lastBubble || 0) < 0.45) return true;
+        this.lastBubble = t;
+        S('bubbles_small', { vol: 0.22 * v, rate: r(0.8, 1.3), pan: (Math.random() - 0.5) * 0.6 });
+        return true;
+      }
+    }
+    return false;
+  }
+
   startRiver() {
     const ctx = this.ctx;
     const len = ctx.sampleRate * 4;
@@ -340,6 +497,13 @@ export class Sound {
   setRiver(cur, fall, near) {
     if (!this.river) return;
     const t = this.ctx.currentTime;
+    if (this.loops) {
+      const sm = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+      this.loops.river?.g.gain.setTargetAtTime(0.45 + Math.min(1, cur / 3) * 0.25, t, 0.5);
+      this.loops.rapids?.g.gain.setTargetAtTime(sm(2.0, 3.4, cur) * 0.85, t, 0.5);
+      this.loops.waterfall?.g.gain.setTargetAtTime(fall * 1.1, t, 0.5);
+      return;
+    }
     const k = Math.min(1, cur / 4);
     this.river.g.gain.setTargetAtTime(0.16 + k * 0.25 + fall * 0.4, t, 0.4);
     this.river.lp.frequency.setTargetAtTime(500 + k * 900 + fall * 1500, t, 0.4);

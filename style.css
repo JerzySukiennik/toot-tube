@@ -78,6 +78,7 @@ input { font: inherit; color: var(--navy); }
 .rules { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
 .rules li { display: flex; gap: 10px; font-size: 13.5px; line-height: 1.35; color: var(--navy-2); font-weight: 700; }
 .rules i { width: 12px; height: 12px; border-radius: 50%; flex: none; margin-top: 3px; }
+.credits { margin: 14px 2px 0; font-size: 11.5px; line-height: 1.4; color: #8a97b5; font-weight: 700; }
 .seg { display: flex; gap: 6px; margin-bottom: 10px; }
 .seg button { border: 0; background: #f4f8ff; border-radius: 10px; padding: 6px 12px; font-size: 13px; color: var(--navy-2); }
 .seg button.on { background: var(--navy); color: #fff; }
