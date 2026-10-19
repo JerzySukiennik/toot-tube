@@ -358,9 +358,15 @@ export class RaftView {
     const sl = Math.max(-0.6, raft.slope || 0);
     const tx = wz * 0.035 + Math.sin(this.t * 1.7) * 0.02 - sl * flz * 0.8;
     const tz = -wx * 0.035 + Math.cos(this.t * 1.3) * 0.02 + sl * flx * 0.8;
-    this.tvx += ((tx - this.tiltX) * 30 - this.tvx * 5) * dt;
-    this.tvz += ((tz - this.tiltZ) * 30 - this.tvz * 5) * dt;
-    this.tiltX += this.tvx * dt; this.tiltZ += this.tvz * dt;
+    const steps = Math.min(12, Math.ceil(dt / (1 / 120)));
+    const h = Math.min(dt, 0.2) / steps;
+    for (let i = 0; i < steps; i++) {
+      this.tvx += ((tx - this.tiltX) * 30 - this.tvx * 5) * h;
+      this.tvz += ((tz - this.tiltZ) * 30 - this.tvz * 5) * h;
+      this.tiltX += this.tvx * h; this.tiltZ += this.tvz * h;
+    }
+    this.tiltX = Math.max(-0.3, Math.min(0.3, this.tiltX));
+    this.tiltZ = Math.max(-0.3, Math.min(0.3, this.tiltZ));
     this.root.position.set(raft.x, raft.y + (waterBob || 0), raft.z);
     this.root.rotation.y = raft.a;
     this.tilt.rotation.set(this.tiltX, 0, this.tiltZ);
