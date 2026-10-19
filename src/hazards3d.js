@@ -242,7 +242,7 @@ export class HazardViews {
         post.castShadow = true;
         scene.add(post);
         const arms = new THREE.Mesh(sweeperArms(h.len, h.arms), solid);
-        arms.position.set(h.x, h.wy + 0.65, h.z);
+        arms.position.set(h.x, h.wy + 0.71, h.z);
         arms.castShadow = true;
         scene.add(arms);
         const ring = new THREE.Mesh(new THREE.RingGeometry(h.len - 0.12, h.len + 0.12, 64), ringMat);

@@ -15,10 +15,10 @@ function segDist(px, pz, ax, az, bx, bz) {
 
 export function doorsClose(T, period, phase) {
   const u = ((T / period + phase) % 1 + 1) % 1;
-  if (u < 0.5) return 0;
-  if (u < 0.65) { const k = (u - 0.5) / 0.15; return k * k * (3 - 2 * k); }
-  if (u < 0.82) return 1;
-  const k = (u - 0.82) / 0.18;
+  if (u < 0.58) return 0;
+  if (u < 0.7) { const k = (u - 0.58) / 0.12; return k * k * (3 - 2 * k); }
+  if (u < 0.84) return 1;
+  const k = (u - 0.84) / 0.16;
   return 1 - k * k * (3 - 2 * k);
 }
 
@@ -95,7 +95,7 @@ export class Hazards {
       const dx = px - h.x, dz = pz - h.z;
       const dist = Math.hypot(dx, dz);
       if (dist > h.len + 0.8) continue;
-      const armY0 = h.wy + 0.5, armY1 = h.wy + 0.8;
+      const armY0 = h.wy + 0.56, armY1 = h.wy + 0.86;
       if (y1 < armY0 || y0 > armY1) continue;
       for (let k = 0; k < h.arms; k++) {
         const a = this.sweeperAngle(h, T, k);
