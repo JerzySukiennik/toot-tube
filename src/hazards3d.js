@@ -151,6 +151,17 @@ export class HazardViews {
     const ringMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.22, depthWrite: false });
 
     for (const h of haz.list) {
+      const before = scene.children.length;
+      const count = this.items.length;
+      this.build(scene, h, { solid, buoyGeo, donutGeo, donutMat, housingMat, housingGeo, postGeo, canGeo, canMat, glowMat, ringMat });
+      const objs = scene.children.slice(before);
+      for (let i = count; i < this.items.length; i++) this.items[i].objs = objs;
+    }
+  }
+
+  build(scene, h, { solid, buoyGeo, donutGeo, donutMat, housingMat, housingGeo, postGeo, canGeo, canMat, glowMat, ringMat }) {
+    const haz = this.haz;
+    {
       if (h.type === 'roller') {
         const len = Math.hypot(h.bx - h.ax, h.bz - h.az);
         const g = new THREE.Group();
@@ -342,7 +353,10 @@ export class HazardViews {
 
   update(T, dt, now, focusS) {
     for (const it of this.items) {
-      if (Math.abs(it.h.s - focusS) > 140) continue;
+      const d = it.h.s - focusS;
+      const vis = d < 200 && d > -45;
+      if (it.objs && it.vis !== vis) { it.vis = vis; for (const o of it.objs) o.visible = vis; }
+      if (!vis || d > 150) continue;
       it.update(T, dt, now);
     }
   }

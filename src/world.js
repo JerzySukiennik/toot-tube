@@ -20,10 +20,10 @@ export function buildWorld(scene, track, haz) {
   world.uTime = uTime;
 
   scene.background = FOG.clone();
-  scene.fog = new THREE.Fog(FOG, 80, 300);
+  scene.fog = new THREE.Fog(FOG, 75, 285);
 
   const sky = new THREE.Mesh(
-    new THREE.SphereGeometry(520, 32, 16),
+    new THREE.SphereGeometry(300, 32, 16),
     new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
       uniforms: { top: { value: SKY_TOP }, hor: { value: SKY_HOR }, sunDir: { value: new THREE.Vector3(0.45, 0.8, 0.35).normalize() } },
@@ -46,9 +46,9 @@ export function buildWorld(scene, track, haz) {
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff0d8, 2.35);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1536, 1536);
   const sc = sun.shadow.camera;
-  sc.left = -26; sc.right = 26; sc.top = 26; sc.bottom = -26; sc.near = 5; sc.far = 140;
+  sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 5; sc.far = 140;
   sun.shadow.bias = -0.0009;
   sun.shadow.normalBias = 0.035;
   scene.add(sun);
@@ -56,6 +56,8 @@ export function buildWorld(scene, track, haz) {
   const sunOff = new THREE.Vector3(0.45, 0.8, 0.35).normalize().multiplyScalar(70);
   world.sun = sun;
 
+  const cull = [];
+  world.cull = cull;
   const field = buildField(track);
   world.field = field;
   world.groundY = (x, z) => field.height(x, z);
@@ -63,15 +65,20 @@ export function buildWorld(scene, track, haz) {
   world.water = buildWater(scene, track, haz, uTime);
   buildBanks(scene, track);
   buildCaps(scene, track);
-  buildTerrain(scene, track, field);
-  buildDecor(scene, track, field);
+  buildTerrain(scene, track, field, cull);
+  buildDecor(scene, track, field, cull);
   world.clouds = buildClouds(scene, track);
   world.arches = buildArches(scene, track);
   world.beacons = buildBeacons(scene, track);
-  buildSigns(scene, track);
+  buildSigns(scene, track, cull);
+  for (const a of world.arches) cull.push({ obj: a.group, s: a.s, ahead: 300, behind: 60 });
 
-  world.update = (dt, focus, cam) => {
+  world.update = (dt, focus, cam, s = 0) => {
     uTime.value += dt;
+    for (const c of cull) {
+      const d = c.s - s;
+      c.obj.visible = d < c.ahead && d > -c.behind;
+    }
     sky.position.copy(cam.position);
     sun.position.copy(focus).add(sunOff);
     sun.target.position.copy(focus);
@@ -236,6 +243,7 @@ function buildWater(scene, track, haz, uTime) {
   };
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
+  mesh.userData.kind = 'water';
   scene.add(mesh);
   return mesh;
 }
@@ -310,7 +318,7 @@ function buildBanks(scene, track) {
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     g.setIndex(index);
     g.computeVertexNormals();
-    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }));
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true }));
     m.receiveShadow = true;
     scene.add(m);
 
@@ -380,14 +388,14 @@ function buildCaps(scene, track) {
   }
 }
 
-function buildTerrain(scene, track, field) {
-  const b = track.bounds, M = 220, T = 48, step = 3;
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: false });
+function buildTerrain(scene, track, field, cull) {
+  const b = track.bounds, M = 220, T = 72, step = 3;
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const c = new THREE.Color();
   for (let tx = b.minX - M; tx < b.maxX + M; tx += T) {
     for (let tz = b.minZ - M; tz < b.maxZ + M; tz += T) {
       const n = field.near(tx + T / 2, tz + T / 2);
-      if (!n || n.d > 230) continue;
+      if (!n || n.d > 240) continue;
       const N = T / step;
       const pos = [], col = [], index = [];
       for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
@@ -417,7 +425,9 @@ function buildTerrain(scene, track, field) {
       g.computeBoundingSphere();
       const m = new THREE.Mesh(g, mat);
       m.receiveShadow = true;
+      m.userData.kind = 'terrain';
       scene.add(m);
+      cull.push({ obj: m, s: n.i * DS, ahead: 330, behind: 140 });
     }
   }
 }
@@ -524,11 +534,12 @@ function scatter(scene, geo, mat, list, shadow) {
   im.castShadow = !!shadow;
   im.receiveShadow = true;
   im.computeBoundingSphere();
+  im.userData.kind = 'decor';
   scene.add(im);
   return im;
 }
 
-function buildDecor(scene, track, field) {
+function buildDecor(scene, track, field, cull) {
   const r = rng(42);
   const palms = [], bushes = [], rocks = [], umbrellas = [], flowers = [];
   const busy = [...CHECKPOINTS, FINISH_S, START_S + 4];
@@ -545,7 +556,7 @@ function buildDecor(scene, track, field) {
       const n = field.near(x, z);
       if (!n || n.d - track.HW[n.i] < 5) continue;
       const y = field.height(x, z);
-      const it = { x, y: y - 0.05, z, ry: r() * Math.PI * 2, s: 0.8 + r() * 0.5 };
+      const it = { x, y: y - 0.05, z, ry: r() * Math.PI * 2, s: 0.8 + r() * 0.5, at: s };
       if (nearBusy && dd < 9) continue;
       if (roll < 0.2) { it.s = 0.85 + r() * 0.45; it.tilt = (r() - 0.5) * 0.15; palms.push(it); }
       else if (roll < 0.48) bushes.push(it);
@@ -556,11 +567,24 @@ function buildDecor(scene, track, field) {
   }
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, flatShading: true });
   const matDS = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, flatShading: true, side: THREE.DoubleSide });
-  scatter(scene, palmGeometry(), matDS, palms, true);
-  scatter(scene, bushGeometry(), mat, bushes, false);
-  scatter(scene, rockGeometry(), mat, rocks, false);
-  scatter(scene, umbrellaGeometry(), matDS, umbrellas, true);
-  scatter(scene, flowerGeometry(), mat, flowers, false);
+  const CH = 60;
+  const chunked = (geo, m, list, shadow) => {
+    const groups = new Map();
+    for (const it of list) {
+      const k = Math.floor(it.at / CH);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(it);
+    }
+    for (const [k, items] of groups) {
+      const im = scatter(scene, geo, m, items, shadow);
+      cull.push({ obj: im, s: (k + 0.5) * CH, ahead: 300, behind: 90 });
+    }
+  };
+  chunked(palmGeometry(), matDS, palms, true);
+  chunked(bushGeometry(), mat, bushes, false);
+  chunked(rockGeometry(), mat, rocks, false);
+  chunked(umbrellaGeometry(), matDS, umbrellas, true);
+  chunked(flowerGeometry(), mat, flowers, false);
 }
 
 function buildClouds(scene, track) {
@@ -673,22 +697,22 @@ function buildBeacons(scene, track) {
     g.position.set(f.x, f.y, f.z);
     const gemMat = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ff9a1f', emissiveIntensity: 0.55, roughness: 0.25, metalness: 0.1, fog: false });
     const gm = new THREE.Mesh(gem, gemMat);
-    gm.position.y = 6.5;
+    gm.position.y = 5;
     g.add(gm);
     const beamMat = new THREE.MeshBasicMaterial({ color: '#ffe066', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide, fog: false, blending: THREE.AdditiveBlending });
     const beam = new THREE.Mesh(beamGeo, beamMat);
-    beam.scale.y = 5.6;
+    beam.scale.y = 4.1;
     beam.position.y = 0.4;
     g.add(beam);
     const tex = textTexture(d.label, { w: 512, h: 256, bg: null, fg: '#ffffff', size: d.finish ? 120 : 190 });
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, fog: false, transparent: true, depthWrite: false }));
     spr.scale.set(d.finish ? 8 : 6, d.finish ? 4 : 3, 1);
-    spr.position.y = 9.6;
+    spr.position.y = 7.9;
     g.add(spr);
     const outline = textTexture(d.label, { w: 512, h: 256, bg: null, fg: '#1d2b53', size: d.finish ? 120 : 190 });
     const sh = new THREE.Sprite(new THREE.SpriteMaterial({ map: outline, fog: false, transparent: true, depthWrite: false }));
     sh.scale.copy(spr.scale).multiplyScalar(1.08);
-    sh.position.y = 9.45;
+    sh.position.y = 7.75;
     sh.renderOrder = -1;
     g.add(sh);
     scene.add(g);
@@ -709,7 +733,7 @@ function buildBeacons(scene, track) {
         g.visible = shown > 0.02;
         const pulse = state === 'next' ? 1 + Math.sin(t * 4) * 0.08 : 1;
         gm.rotation.y = t * (state === 'next' ? 1.6 : 0.6);
-        gm.position.y = 6.5 + Math.sin(t * 1.6) * 0.35;
+        gm.position.y = 5 + Math.sin(t * 1.6) * 0.35;
         gm.scale.setScalar(shown * pulse);
         beamMat.opacity = (state === 'next' ? 0.32 + Math.sin(t * 4) * 0.08 : 0.14) * shown;
         spr.scale.set((d.finish ? 8 : 6) * shown, (d.finish ? 4 : 3) * shown, 1);
@@ -720,7 +744,7 @@ function buildBeacons(scene, track) {
   return out;
 }
 
-function buildSigns(scene, track) {
+function buildSigns(scene, track, cull) {
   const post = new THREE.MeshStandardMaterial({ color: '#b07a45', roughness: 0.9 });
   for (const h of HAZARDS) {
     if (h.type !== 'sign') continue;
@@ -740,5 +764,6 @@ function buildSigns(scene, track) {
     g.position.set(f.x - f.tz * lat, f.y + BANK_H, f.z + f.tx * lat);
     g.rotation.y = Math.atan2(-f.tx, -f.tz) - h.side * 0.45;
     scene.add(g);
+    cull.push({ obj: g, s: h.s, ahead: 260, behind: 40 });
   }
 }

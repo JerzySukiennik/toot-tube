@@ -149,7 +149,7 @@ input { font: inherit; color: var(--navy); }
 
 @media (max-width: 1100px) {
   #menu { flex-direction: column; align-items: flex-start; justify-content: flex-start; overflow: auto; padding: 24px; }
-  #menu::before { background: rgba(211, 240, 255, 0.55); }
+  #menu::before { background: linear-gradient(90deg, rgba(211, 240, 255, 0.7) 0%, rgba(211, 240, 255, 0) 55%); }
   .menu-left { align-self: auto; }
   .play-card { margin-top: 8px; }
   .logo { font-size: 80px; }

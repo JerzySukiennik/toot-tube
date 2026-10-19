@@ -25,6 +25,7 @@ export const PHYS = {
 export const THRUST_MULT = [1, 1.65, 1.2, 1.0];
 
 export const PLAYER = {
+  radius: 0.42,
   height: 1.25,
   swim: 2.7,
   fartSwim: 0.55,

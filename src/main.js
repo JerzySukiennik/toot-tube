@@ -71,11 +71,11 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 let pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
 renderer.setPixelRatio(pixelRatio);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, 1, 0.3, 700);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.3, 340);
 const sound = new Sound();
 
 let track, haz, world, hazViews, fx, raftView;
@@ -690,7 +690,7 @@ function frame() {
   updateViews(dt, now);
   updateCamera(dt);
   hazViews.update(G.T, dt, performance.now() / 1000, G.raft.s);
-  world.update(dt, tmpV.set(G.raft.x, G.raft.y, G.raft.z), camera);
+  world.update(dt, tmpV.set(G.raft.x, G.raft.y, G.raft.z), camera, G.raft.s);
   fx.update(dt);
   updateHud(dt, now);
   sendNet(now);
@@ -940,6 +940,8 @@ async function boot() {
   G.raft = makeRaft(track, START_S);
   G.track = track;
   G.haz = haz;
+  G.scene = scene;
+  G.renderer = renderer;
   G.net = new SoloNet(G.profile);
   resize();
   buildMenu();
