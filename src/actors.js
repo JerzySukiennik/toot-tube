@@ -148,7 +148,11 @@ export class Animal {
     this.kind = kind;
     this.root = new THREE.Group();
     this.pivot = new THREE.Group();
-    this.root.add(this.pivot);
+    this.pivot.scale.setScalar(1);
+    this.inner = new THREE.Group();
+    this.inner.scale.setScalar(1.3);
+    this.root.add(this.inner);
+    this.inner.add(this.pivot);
     this.body = new THREE.Group();
     this.pivot.add(this.body);
     this.head = new THREE.Group();
@@ -160,7 +164,7 @@ export class Animal {
       const f = new THREE.Group();
       f.position.set(s * 0.15, 0, 0.05);
       ball(f, this.feetColor, 0, 0.04, 0.03, ...fs);
-      this.root.add(f);
+      this.inner.add(f);
       return f;
     });
     const as = this.flippers ? [0.06, 0.2, 0.12] : [0.07, 0.15, 0.07];
@@ -195,7 +199,7 @@ export class Animal {
     tex.colorSpace = THREE.SRGBColorSpace;
     this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
     this.tag.scale.set(1.5, 0.375, 1);
-    this.tag.position.y = 1.55;
+    this.tag.position.y = 1.95;
     this.tag.renderOrder = 10;
     this.root.add(this.tag);
   }
@@ -203,40 +207,24 @@ export class Animal {
   animate(st, dt) {
     this.t += dt;
     const t = this.t;
-    const k = Math.min(1, (st.speed || 0) / 2.6);
+    const k = Math.min(1, (st.speed || 0) / 2.2);
     const ph = (st.walkPhase || 0) * Math.PI;
-    let bodyY = Math.abs(Math.sin(ph)) * 0.07 * k;
-    let roll = Math.sin(ph) * 0.13 * k;
-    let lean = 0.06 * k;
-    let sy = 1 + Math.sin(t * 2.2) * 0.015, sxz = 1;
-    let armSwing = Math.sin(ph) * 0.7 * k;
-    let armUp = 0;
-    let eyeY = 1;
-
-    if (!st.grounded) {
-      const up = Math.max(-1, Math.min(1, (st.vy || 0) / 5));
-      sy *= 1 + up * 0.1; sxz *= 1 - up * 0.05;
-      armUp = 1.1;
-      lean = -0.1;
-    }
-    if (st.landK > 0.01) { sy *= 1 - 0.28 * st.landK; sxz *= 1 + 0.16 * st.landK; }
+    const side = st.dir || 0;
+    let lean = 0.32, roll = -side * 0.22 * k, sy = 1 + Math.sin(t * 2.2) * 0.015, sxz = 1, eyeY = 1;
+    let armRaise = 1.95 + Math.sin(t * 1.7) * 0.05, armSwing = Math.sin(ph) * 0.35 * k;
+    let bodyY = Math.sin(t * 2.6) * 0.02;
     if (st.fart) {
-      const j = Math.sin(t * 46) * 0.02;
-      lean = 0.3;
-      sy *= 0.9 + j; sxz *= 1.05 - j;
-      armUp = 0.6;
-      eyeY = 0.3;
-      bodyY -= 0.04;
+      const j = Math.sin(t * 46) * 0.025;
+      lean = 0.5; sy *= 1.06 + j; sxz *= 0.97 - j; eyeY = 0.25; bodyY += 0.04;
     }
+    if (st.duck) { eyeY = 0.1; sxz *= 1.06; armRaise = 2.6; }
     if (st.mode === 'knocked' || st.mode === 'fallen') {
       this.spin += dt * 11;
-      armUp = 1.4;
-      eyeY = 1.4;
+      armRaise = 3.0; eyeY = 1.4;
     } else this.spin *= Math.exp(-dt * 10);
-
     this.blink -= dt;
-    if (this.blink < 0) { this.blink = 2.5 + Math.random() * 3.5; }
-    if (this.blink < 0.12 && !st.fart) eyeY = 0.1;
+    if (this.blink < 0) this.blink = 2.5 + Math.random() * 3.5;
+    if (this.blink < 0.12 && !st.fart && !st.duck) eyeY = 0.1;
 
     this.pivot.position.y = bodyY;
     this.pivot.rotation.set(lean + this.spin, 0, roll);
@@ -244,36 +232,51 @@ export class Animal {
     for (const e of this.eyes) e.scale.y += (eyeY - e.scale.y) * Math.min(1, dt * 20);
     this.arms.forEach((a) => {
       const s = a.userData.side;
-      a.rotation.x = armSwing * s - armUp * 0.4;
-      a.rotation.z = s * (0.35 + armUp * 0.9);
+      a.rotation.x = -armRaise + armSwing * s;
+      a.rotation.z = s * 0.18;
     });
     this.feet.forEach((f, i) => {
       const s = i ? 1 : -1;
-      f.position.z = 0.05 + Math.sin(ph) * 0.13 * k * s;
-      f.position.y = Math.max(0, Math.cos(ph) * s) * 0.07 * k + (st.grounded ? 0 : 0.05);
+      const kick = Math.sin(t * (4 + k * 6) + i * Math.PI) * (0.06 + k * 0.08);
+      f.position.z = -0.12 + kick * 0.6 * s;
+      f.position.y = 0.06 + kick;
     });
     this.head.rotation.z = Math.sin(t * 1.3) * 0.04 + (st.fart ? Math.sin(t * 30) * 0.03 : 0);
+    this.head.rotation.x = -0.25;
     if (this.tail) this.tail.rotation.z = Math.sin(t * (st.fart ? 30 : 4)) * (st.fart ? 0.6 : 0.2);
   }
 }
 
-function deckTexture() {
+const TAU = Math.PI * 2;
+const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+function ringTexture(colors) {
+  const W = 2048;
   const c = document.createElement('canvas');
-  c.width = c.height = 512;
+  c.width = W; c.height = 4;
   const g = c.getContext('2d');
-  g.fillStyle = '#2f62e8'; g.fillRect(0, 0, 512, 512);
-  g.strokeStyle = 'rgba(255,255,255,0.55)';
-  g.lineWidth = 6;
-  for (let r = 60; r < 260; r += 55) { g.beginPath(); g.arc(256, 256, r, 0, Math.PI * 2); g.stroke(); }
-  g.lineWidth = 4;
-  for (let k = 0; k < 12; k++) {
-    const a = (k / 12) * Math.PI * 2;
-    g.beginPath(); g.moveTo(256 + Math.cos(a) * 60, 256 + Math.sin(a) * 60); g.lineTo(256 + Math.cos(a) * 256, 256 + Math.sin(a) * 256); g.stroke();
+  const n = colors.length;
+  for (let x = 0; x < W; x++) {
+    const theta = ((x + 0.5) / W) * TAU;
+    const phi = Math.PI / 2 - theta;
+    let col;
+    if (n <= 1) {
+      col = Math.floor(((theta / TAU) * 12 + 0.5)) % 2 ? '#ffffff' : '#ff8a2a';
+    } else {
+      const w = TAU / n;
+      const rel = wrapA(phi - Math.PI);
+      const idx = (((Math.round(rel / w) % n) + n) % n);
+      const d = wrapA(phi - (Math.PI + idx * w));
+      const stripe = Math.floor(((d + w / 2) / w) * 6) % 2;
+      col = Math.abs(Math.abs(d) - w / 2) < 0.035 ? '#1d2b53' : stripe ? '#ffffff' : colors[idx];
+    }
+    g.fillStyle = col;
+    g.fillRect(x, 0, 1, 4);
   }
-  g.fillStyle = '#ffd23f';
-  g.beginPath(); g.arc(256, 256, 40, 0, Math.PI * 2); g.fill();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = THREE.RepeatWrapping;
+  t.anisotropy = 4;
   return t;
 }
 
@@ -283,75 +286,88 @@ export class RaftView {
     this.tilt = new THREE.Group();
     this.root.add(this.tilt);
     this.deck = new THREE.Group();
-    this.tilt.add(this.deck);
+    this.root.add(this.deck);
 
-    const tg = new THREE.TorusGeometry(RAFT.ringR, RAFT.tubeR, 20, 64).toNonIndexed();
-    const p = tg.attributes.position;
-    const col = new Float32Array(p.count * 3);
-    const A = new THREE.Color('#ffffff'), B = new THREE.Color('#ff8a2a');
-    for (let i = 0; i < p.count; i += 3) {
-      const cx = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, cy = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3;
-      const c = Math.floor(((Math.atan2(cy, cx) + Math.PI) / (Math.PI * 2)) * 8) % 2 ? A : B;
-      for (let k = 0; k < 3; k++) { col[(i + k) * 3] = c.r; col[(i + k) * 3 + 1] = c.g; col[(i + k) * 3 + 2] = c.b; }
-    }
-    tg.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    tg.deleteAttribute('uv');
+    const tg = new THREE.TorusGeometry(RAFT.ringR, RAFT.tubeR, 28, 160);
     tg.rotateX(Math.PI / 2);
-    tg.computeVertexNormals();
-    this.tube = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32 }));
+    this.tubeMat = new THREE.MeshStandardMaterial({ map: ringTexture([1]), roughness: 0.28, metalness: 0 });
+    this.tube = new THREE.Mesh(tg, this.tubeMat);
     this.tube.position.y = RAFT.tubeCY;
     this.tube.castShadow = true;
     this.tube.receiveShadow = true;
     this.tilt.add(this.tube);
 
-    const deck = new THREE.Mesh(
-      new THREE.CylinderGeometry(RAFT.deckR + 0.12, RAFT.deckR + 0.12, 0.1, 48),
-      [new THREE.MeshStandardMaterial({ color: '#2450c4', roughness: 0.7 }), new THREE.MeshStandardMaterial({ map: deckTexture(), roughness: 0.7 }), new THREE.MeshStandardMaterial({ color: '#2450c4' })],
-    );
-    deck.position.y = RAFT.deckY - 0.05;
-    deck.receiveShadow = true;
-    this.tilt.add(deck);
-    this.deckMesh = deck;
-
     const rope = new THREE.MeshStandardMaterial({ color: '#ffd23f', roughness: 0.6 });
-    for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * Math.PI * 2 + Math.PI / 6;
-      const h = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.04, 6, 14, Math.PI), rope);
-      h.position.set(Math.sin(a) * (RAFT.ringR + RAFT.tubeR * 0.85), RAFT.tubeCY - 0.02, Math.cos(a) * (RAFT.ringR + RAFT.tubeR * 0.85));
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * TAU + Math.PI / 8;
+      const h = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.03, 8, 20, Math.PI), rope);
+      h.position.set(Math.sin(a) * (RAFT.ringR + RAFT.tubeR * 0.9), RAFT.tubeCY - 0.02, Math.cos(a) * (RAFT.ringR + RAFT.tubeR * 0.9));
       h.rotation.set(0, a + Math.PI / 2, Math.PI);
-      this.tube.parent.add(h);
+      this.tilt.add(h);
     }
-    const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.12, 10), new THREE.MeshStandardMaterial({ color: '#ffffff' }));
-    valve.position.set(0, RAFT.tubeCY + RAFT.tubeR + 0.03, -RAFT.ringR);
+    const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.1, 12), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.4 }));
+    valve.position.set(0, RAFT.tubeCY + RAFT.tubeR + 0.02, -RAFT.ringR);
     this.tilt.add(valve);
 
+    this.barriers = new THREE.Group();
+    this.tilt.add(this.barriers);
+    this.sectorKey = '';
     this.tiltX = 0; this.tiltZ = 0; this.tvx = 0; this.tvz = 0;
     this.deflate = 0;
     this.t = 0;
+  }
+
+  setSectors(colors) {
+    const key = colors.join(',');
+    if (key === this.sectorKey) return;
+    this.sectorKey = key;
+    const old = this.tubeMat.map;
+    this.tubeMat.map = ringTexture(colors);
+    this.tubeMat.needsUpdate = true;
+    old?.dispose();
+    this.barriers.clear();
+    const n = colors.length;
+    if (n <= 1) return;
+    const postMat = new THREE.MeshStandardMaterial({ color: '#1d2b53', roughness: 0.4 });
+    const capMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.3 });
+    const w = TAU / n;
+    for (let i = 0; i < n; i++) {
+      const phi = Math.PI + i * w + w / 2;
+      const g = new THREE.Group();
+      const post = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.7, 6, 12), postMat);
+      post.position.y = 0.32;
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), capMat);
+      cap.position.y = 0.78;
+      g.add(post, cap);
+      g.children.forEach((m) => { m.castShadow = true; });
+      g.position.set(Math.sin(phi) * RAFT.ringR, RAFT.tubeCY, Math.cos(phi) * RAFT.ringR);
+      g.rotation.y = phi;
+      this.barriers.add(g);
+    }
   }
 
   update(raft, players, dt, waterBob) {
     this.t += dt;
     let wx = 0, wz = 0;
     for (const p of players) {
-      if (!p || p.mode === 'fallen' || !p.grounded) continue;
+      if (!p || p.mode !== 'ok') continue;
       wx += p.x; wz += p.z;
     }
     const ca = Math.cos(raft.a), sa = Math.sin(raft.a);
     const flx = raft.tx * ca - raft.tz * sa, flz = raft.tx * sa + raft.tz * ca;
     const sl = Math.max(-0.6, raft.slope || 0);
-    const tx = wz * 0.055 + Math.sin(this.t * 1.7) * 0.015 - sl * flz * 0.8;
-    const tz = -wx * 0.055 + Math.cos(this.t * 1.3) * 0.015 + sl * flx * 0.8;
+    const tx = wz * 0.035 + Math.sin(this.t * 1.7) * 0.02 - sl * flz * 0.8;
+    const tz = -wx * 0.035 + Math.cos(this.t * 1.3) * 0.02 + sl * flx * 0.8;
     this.tvx += ((tx - this.tiltX) * 30 - this.tvx * 5) * dt;
     this.tvz += ((tz - this.tiltZ) * 30 - this.tvz * 5) * dt;
     this.tiltX += this.tvx * dt; this.tiltZ += this.tvz * dt;
     this.root.position.set(raft.x, raft.y + (waterBob || 0), raft.z);
     this.root.rotation.y = raft.a;
     this.tilt.rotation.set(this.tiltX, 0, this.tiltZ);
-    this.tilt.position.y = -this.deflate * 0.25 + Math.sin(this.t * 2.1) * 0.03;
+    this.tilt.position.y = -this.deflate * 0.1 + Math.sin(this.t * 2.1) * 0.03;
     const d = this.deflate;
     const wob = d > 0 && d < 1 ? Math.sin(this.t * 40) * 0.06 * (1 - d) : 0;
-    this.tube.scale.set(1 + wob - d * 0.05, Math.max(0.15, 1 - d * 0.8), 1 - wob - d * 0.05);
-    this.tube.position.y = RAFT.tubeCY - d * 0.25;
+    this.tube.scale.set(1 + wob + d * 0.05, Math.max(0.3, 1 - d * 0.65), 1 - wob + d * 0.05);
+    this.tube.position.y = RAFT.tubeCY - d * 0.12;
   }
 }

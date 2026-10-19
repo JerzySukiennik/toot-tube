@@ -282,6 +282,25 @@ export class Sound {
       case 'geyser':
         this.noise(t, 1.1, { type: 'bandpass', f0: 500, f1: 2400, q: 0.8, vol: 0.28 * v, attack: 0.1, pan });
         break;
+      case 'barrier':
+        this.tone(t, 0.12, { type: 'triangle', f0: 260, f1: 180, vol: 0.12 * v, pan });
+        this.noise(t, 0.08, { type: 'bandpass', f0: 900, q: 2, vol: 0.08 * v, pan });
+        break;
+      case 'blub':
+        this.noise(t, 0.3, { type: 'lowpass', f0: 1800, f1: 300, vol: 0.25 * v, pan });
+        for (let i = 0; i < 4; i++) {
+          const f = 220 + Math.random() * 260;
+          this.tone(t + i * 0.05 + Math.random() * 0.03, 0.09, { type: 'sine', f0: f, f1: f * 2.2, vol: 0.12 * v, pan });
+        }
+        break;
+      case 'surface':
+        this.noise(t, 0.35, { type: 'bandpass', f0: 2600, f1: 900, q: 0.8, vol: 0.18 * v, pan });
+        break;
+      case 'bubble': {
+        const f = 300 + Math.random() * 500;
+        this.tone(t, 0.06 + Math.random() * 0.04, { type: 'sine', f0: f, f1: f * (1.8 + Math.random()), vol: (0.03 + Math.random() * 0.04) * v, pan: (Math.random() - 0.5) * 0.6 });
+        break;
+      }
       case 'whoosh':
         this.noise(t, 0.35, { type: 'bandpass', f0: 600, f1: 1600, q: 1.5, vol: 0.18 * v, attack: 0.08, pan });
         break;

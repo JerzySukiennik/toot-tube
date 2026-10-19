@@ -49,9 +49,9 @@ export const SECTION_NAMES = [
 ];
 
 export const HAZARDS = [
-  { type: 'sign', s: 16, side: -1, text: 'HOLD SHIFT\nTO TOOT' },
-  { type: 'sign', s: 34, side: 1, text: 'THE TUBE GOES\nWHERE YOU FACE' },
-  { type: 'sign', s: 56, side: -1, text: 'WASD WALK\nSPACE JUMP' },
+  { type: 'sign', s: 16, side: -1, text: 'SPACE\nTO TOOT' },
+  { type: 'sign', s: 34, side: 1, text: 'TOOT FROM THE\nBACK TO GO' },
+  { type: 'sign', s: 56, side: -1, text: 'A / D SWIM\nAROUND THE RING' },
   { type: 'sign', s: 86, side: 1, text: 'PURPLE SPIKES\n= POP!' },
   { type: 'sign', s: 112, side: -1, text: 'BEANS\nREFILL GAS' },
   { type: 'bean', s: 42, lat: -3 },
@@ -72,7 +72,7 @@ export const HAZARDS = [
   { type: 'bean', s: 185, lat: 3 },
   { type: 'bean', s: 236, lat: -3 },
 
-  { type: 'sign', s: 284, side: -1, text: 'SWEEPERS!\nJUMP OVER' },
+  { type: 'sign', s: 284, side: -1, text: 'SWEEPERS!\nS TO DUCK' },
   { type: 'sweeper', s: 300, lat: 0, len: 7.2, w: 1.1, arms: 1, phase: 0 },
   { type: 'roller', s: 315, a: 7.8, b: 4.6 },
   { type: 'sweeper', s: 332, lat: -2.4, len: 6, w: -1.35, arms: 2, phase: 1 },

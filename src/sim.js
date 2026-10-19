@@ -42,8 +42,12 @@ export class Hazards {
       h.rx = -f.tz; h.rz = f.tx;
       const W = (lat) => ({ x: f.x + h.rx * lat, z: f.z + h.rz * lat });
       if (def.lat !== undefined) { const p = W(def.lat); h.x = p.x; h.z = p.z; }
+      const lim = f.hw - 0.85;
+      const cl = (v) => Math.max(-lim, Math.min(lim, v));
+      if (def.type === 'slider') h.amp = Math.min(def.amp, lim - def.len / 2 - 0.1);
       if (def.type === 'roller') {
-        const a = W(def.a), b = W(def.b);
+        h.a = cl(def.a); h.b = cl(def.b);
+        const a = W(h.a), b = W(h.b);
         h.ax = a.x; h.az = a.z; h.bx = b.x; h.bz = b.z;
       }
       if (def.type === 'bean') { h.taken = -1e9; this.beans.push(h); }
@@ -91,7 +95,7 @@ export class Hazards {
       const dx = px - h.x, dz = pz - h.z;
       const dist = Math.hypot(dx, dz);
       if (dist > h.len + 0.8) continue;
-      const armY0 = h.wy + 0.72, armY1 = h.wy + 1.02;
+      const armY0 = h.wy + 0.5, armY1 = h.wy + 0.8;
       if (y1 < armY0 || y0 > armY1) continue;
       for (let k = 0; k < h.arms; k++) {
         const a = this.sweeperAngle(h, T, k);
@@ -240,169 +244,127 @@ export function stepRaft(raft, track, haz, T, inputs, mult, dt, ev) {
   raft.hw = L3.hw; raft.cur = L3.cur; raft.tx = L3.tx; raft.tz = L3.tz;
 }
 
-export function surfaceY(r) {
-  if (r <= RAFT.deckR) return RAFT.deckY;
-  const d = r - RAFT.ringR;
-  if (Math.abs(d) <= RAFT.tubeR) return Math.max(RAFT.deckY, RAFT.tubeCY + Math.sqrt(RAFT.tubeR * RAFT.tubeR - d * d));
-  return r < RAFT.ringR ? RAFT.deckY : -10;
+const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+export function sectorFor(slot, n) {
+  if (n <= 1) return null;
+  const w = (Math.PI * 2) / n;
+  return { c: Math.PI + slot * w, half: w / 2 };
 }
 
-export function makePlayer(slot) {
-  const ang = [Math.PI, Math.PI * 0.35, -Math.PI * 0.35][slot % 3];
-  const r = 0.75;
-  return {
-    x: Math.sin(ang) * r, z: Math.cos(ang) * r, y: RAFT.deckY,
-    vx: 0, vz: 0, vy: 0, f: 0, grounded: true, mode: 'ok', airT: 0,
-    gas: 1, gasIdle: 0, fart: false, fartHold: 0, coyote: 0, jumpBuf: 0,
-    walkPhase: 0, speed: 0, landK: 0, knockT: 0, fallen: false, fartT: 0,
+function clampToSector(p) {
+  const sec = p.sector;
+  if (!sec) { p.phi = wrap(p.phi); return false; }
+  const lim = sec.half - PLAYER.sectorPad;
+  const d = wrap(p.phi - sec.c);
+  if (d > lim || d < -lim) {
+    p.phi = sec.c + Math.max(-lim, Math.min(lim, d));
+    return true;
+  }
+  p.phi = sec.c + d;
+  return false;
+}
+
+function placeOnRing(p) {
+  p.x = Math.sin(p.phi) * RAFT.hangR;
+  p.z = Math.cos(p.phi) * RAFT.hangR;
+  p.f = p.phi + Math.PI;
+}
+
+export function makePlayer(slot = 0, n = 1) {
+  const sector = sectorFor(slot, n);
+  const p = {
+    phi: sector ? sector.c : Math.PI, vphi: 0, x: 0, z: 0, y: PLAYER.hangY, f: 0,
+    vx: 0, vy: 0, vz: 0, mode: 'ok', knockT: 0, grounded: true, landK: 0,
+    gas: 1, gasIdle: 0, fart: false, fartHold: 0, fartT: 0,
+    duck: false, duckK: 0, breath: PLAYER.breath, duckLock: false,
+    speed: 0, walkPhase: 0, sector, bob: Math.random() * 6,
   };
+  placeOnRing(p);
+  return p;
 }
 
-export function resetPlayer(p, slot) {
-  const n = makePlayer(slot);
-  Object.assign(p, n);
+export function resetPlayer(p, slot, n) {
+  Object.assign(p, makePlayer(slot, n));
 }
 
-export function stepPlayer(p, inp, raft, haz, T, dt, others, ev) {
-  const ca = Math.cos(raft.a), sa = Math.sin(raft.a);
-  const dvx = raft.dvx, dvz = raft.dvz;
-  const dlx = dvx * ca - dvz * sa, dlz = dvx * sa + dvz * ca;
+export function setSector(p, slot, n) {
+  p.sector = sectorFor(slot, n);
+  if (p.mode === 'ok') { clampToSector(p); placeOnRing(p); }
+}
 
+export function stepPlayer(p, inp, raft, haz, T, dt, ev) {
   if (p.mode === 'fallen') return;
+  const ca = Math.cos(raft.a), sa = Math.sin(raft.a);
 
-  let mx = 0, mz = 0;
-  if (p.mode === 'ok' && inp.active) {
-    const wx = inp.mx, wz = inp.mz;
-    mx = wx * ca - wz * sa; mz = wx * sa + wz * ca;
+  if (p.mode === 'knocked') {
+    p.knockT += dt;
+    const rot = -raft.w * dt;
+    const c = Math.cos(rot), s = Math.sin(rot);
+    const dlx = raft.dvx * ca - raft.dvz * sa, dlz = raft.dvx * sa + raft.dvz * ca;
+    p.vx -= dlx; p.vz -= dlz;
+    [p.x, p.z] = [p.x * c + p.z * s, -p.x * s + p.z * c];
+    [p.vx, p.vz] = [p.vx * c + p.vz * s, -p.vx * s + p.vz * c];
+    p.f += rot;
+    p.vy -= PLAYER.gravity * dt;
+    p.x += p.vx * dt; p.z += p.vz * dt; p.y += p.vy * dt;
+    if (p.y < PLAYER.hangY - 0.2 && p.knockT > 0.25) {
+      p.mode = 'fallen';
+      ev.push({ type: 'fell' });
+    }
+    return;
   }
-  const mlen = Math.hypot(mx, mz);
-  if (mlen > 1) { mx /= mlen; mz /= mlen; }
 
-  const wantFart = p.mode === 'ok' && inp.active && inp.fart;
-  if (wantFart && p.gas > 0.02) {
-    if (!p.fart) { p.fart = true; p.fartHold = 0; ev.push({ type: 'fartStart' }); }
-  }
+  const act = !!inp.active;
+  const lr = act ? (inp.lr || 0) : 0;
+
+  if (p.breath <= 0.02) p.duckLock = true;
+  if (p.duckLock && p.breath > 0.45) p.duckLock = false;
+  const wantDuck = act && inp.duck && !p.duckLock;
+  if (wantDuck && !p.duck) ev.push({ type: 'duck' });
+  if (!wantDuck && p.duck) ev.push({ type: 'surface' });
+  p.duck = wantDuck;
+  p.breath = p.duck ? Math.max(0, p.breath - dt) : Math.min(PLAYER.breath, p.breath + PLAYER.breathRegen * dt);
+  p.duckK += ((p.duck ? 1 : 0) - p.duckK) * Math.min(1, dt * 14);
+
+  const wantFart = act && inp.fart && !p.duck;
+  if (wantFart && p.gas > 0.02 && !p.fart) { p.fart = true; p.fartHold = 0; ev.push({ type: 'fartStart' }); }
   if (p.fart) {
     p.fartHold += dt;
     p.gas = Math.max(0, p.gas - GAS.drain * dt);
     p.gasIdle = 0;
-    if ((!wantFart && p.fartHold >= GAS.minPuff) || p.gas <= 0 || p.mode !== 'ok') {
+    if ((!wantFart && p.fartHold >= GAS.minPuff) || p.gas <= 0 || p.duck) {
       p.fart = false; ev.push({ type: 'fartEnd', empty: p.gas <= 0 });
     }
   } else {
     p.gasIdle += dt;
     if (p.gasIdle > GAS.delay) p.gas = Math.min(1, p.gas + GAS.regen * dt);
-    if (wantFart && p.gas <= 0.02 && inp.fartPressed) ev.push({ type: 'fartEmpty' });
+    if (act && inp.fartPressed && p.gas <= 0.02) ev.push({ type: 'fartEmpty' });
   }
   p.fartT = p.fart ? p.fartT + dt : 0;
 
-  if (mlen > 0.05) {
-    const target = Math.atan2(mx, mz);
-    let d = target - p.f;
-    d = Math.atan2(Math.sin(d), Math.cos(d));
-    p.f += d * Math.min(1, dt * (p.fart ? 7 : 14));
+  const speed = (PLAYER.swim / RAFT.hangR) * (p.fart ? PLAYER.fartSwim : 1) * (p.duck ? 0.45 : 1);
+  p.vphi += (lr * speed - p.vphi) * (1 - Math.exp(-PLAYER.accel * dt));
+  p.phi += p.vphi * dt;
+  if (clampToSector(p)) {
+    if (Math.abs(p.vphi) > 0.4) ev.push({ type: 'barrier' });
+    p.vphi = 0;
   }
+  placeOnRing(p);
+  p.bob += dt;
+  p.y = PLAYER.hangY + (PLAYER.duckY - PLAYER.hangY) * p.duckK + Math.sin(p.bob * 2.3) * 0.04 + (p.fart ? 0.06 : 0);
+  p.speed = Math.abs(p.vphi) * RAFT.hangR;
+  p.walkPhase += p.speed * dt * 2.6;
 
-  const speed = PLAYER.walk * (p.fart ? PLAYER.fartWalk : 1);
-  if (p.grounded) {
-    const k = 1 - Math.exp(-PLAYER.accel * dt);
-    p.vx += (mx * speed - p.vx) * k;
-    p.vz += (mz * speed - p.vz) * k;
-    p.vx -= dlx * 0.28; p.vz -= dlz * 0.28;
-  } else {
-    if (p.mode === 'ok') {
-      const k = 1 - Math.exp(-PLAYER.accel * PLAYER.airControl * dt);
-      p.vx += (mx * speed - p.vx) * k;
-      p.vz += (mz * speed - p.vz) * k;
-    }
-    p.vx -= dlx; p.vz -= dlz;
-    const rot = -raft.w * dt;
-    const c = Math.cos(rot), s = Math.sin(rot);
-    const nx = p.x * c + p.z * s, nz = -p.x * s + p.z * c;
-    p.x = nx; p.z = nz;
-    const nvx = p.vx * c + p.vz * s, nvz = -p.vx * s + p.vz * c;
-    p.vx = nvx; p.vz = nvz;
-    p.f += rot;
-    if (p.fart) {
-      p.vx += Math.sin(p.f) * PLAYER.airFart * dt;
-      p.vz += Math.cos(p.f) * PLAYER.airFart * dt;
-      p.vy += PLAYER.airLift * dt;
-    }
+  const wx = raft.x + p.x * ca + p.z * sa, wz = raft.z - p.x * sa + p.z * ca;
+  const top = raft.y + p.y + PLAYER.height;
+  const hit = haz.hitSweeper(wx, wz, top - 0.55, top, T);
+  if (hit) {
+    p.mode = 'knocked'; p.knockT = 0; p.fart = false; p.duck = false;
+    const ox = Math.sin(p.phi), oz = Math.cos(p.phi);
+    const kx = hit.tx * 5.5, kz = hit.tz * 5.5;
+    p.vx = kx * ca - kz * sa + ox * 3; p.vz = kx * sa + kz * ca + oz * 3;
+    p.vy = 6;
+    ev.push({ type: 'knocked' });
   }
-
-  p.coyote = p.grounded ? PLAYER.coyote : p.coyote - dt;
-  p.jumpBuf = inp.active && inp.jumpPressed && p.mode === 'ok' ? PLAYER.jumpBuffer : p.jumpBuf - dt;
-  if (p.jumpBuf > 0 && p.coyote > 0) {
-    p.vy = PLAYER.jumpV; p.grounded = false; p.coyote = 0; p.jumpBuf = 0;
-    ev.push({ type: 'jump' });
-  }
-
-  p.x += p.vx * dt; p.z += p.vz * dt;
-
-  for (const o of others) {
-    if (!o || o.mode === 'fallen') continue;
-    const dx = p.x - o.x, dz = p.z - o.z;
-    const d = Math.hypot(dx, dz);
-    const min = PLAYER.radius * 2;
-    if (d < min && Math.abs(p.y - o.y) < 0.8) {
-      const nx = d > 0.001 ? dx / d : 1, nz = d > 0.001 ? dz / d : 0;
-      p.x += nx * (min - d) * 0.7; p.z += nz * (min - d) * 0.7;
-      const vn = p.vx * nx + p.vz * nz;
-      if (vn < 0) { p.vx -= nx * vn; p.vz -= nz * vn; }
-    }
-  }
-
-  let r = Math.hypot(p.x, p.z);
-  if (p.grounded) {
-    if (r > PLAYER.rMax) {
-      p.x *= PLAYER.rMax / r; p.z *= PLAYER.rMax / r;
-      const nx = p.x / PLAYER.rMax, nz = p.z / PLAYER.rMax;
-      const vn = p.vx * nx + p.vz * nz;
-      if (vn > 0) { p.vx -= nx * vn; p.vz -= nz * vn; }
-      r = PLAYER.rMax;
-    }
-    const sy = surfaceY(r);
-    p.y += (sy - p.y) * Math.min(1, dt * 20);
-    p.vy = 0;
-  } else {
-    p.vy -= PLAYER.gravity * dt;
-    p.y += p.vy * dt;
-    const sy = surfaceY(r);
-    if (p.vy <= 0 && r <= RAFT.ringR + RAFT.tubeR * 0.85 && p.y <= sy) {
-      p.y = sy; p.grounded = true; p.landK = Math.min(1, -p.vy / 7);
-      if (p.mode === 'knocked') p.mode = 'ok';
-      ev.push({ type: 'land', mag: -p.vy });
-      p.vy = 0;
-      if (r > PLAYER.rMax) { p.x *= PLAYER.rMax / r; p.z *= PLAYER.rMax / r; }
-    } else if (p.y < -0.25 && r > RAFT.ringR) {
-      p.mode = 'fallen';
-      p.fart = false;
-      ev.push({ type: 'fell' });
-      return;
-    }
-  }
-  if (p.grounded) p.airT = 0; else p.airT += dt;
-
-  if (p.mode === 'ok' || p.mode === 'knocked') {
-    const wx = raft.x + p.x * ca + p.z * sa, wz = raft.z - p.x * sa + p.z * ca;
-    const wy = raft.y + p.y;
-    const hit = p.mode === 'ok' ? haz.hitSweeper(wx, wz, wy + 0.05, wy + PLAYER.height, T) : null;
-    if (hit) {
-      p.mode = 'knocked'; p.knockT = 0; p.grounded = false; p.fart = false;
-      const kx = hit.tx * 7 + hit.ox * 2.5, kz = hit.tz * 7 + hit.oz * 2.5;
-      p.vx = kx * ca - kz * sa; p.vz = kx * sa + kz * ca;
-      p.vy = 5.5;
-      ev.push({ type: 'knocked' });
-    }
-  }
-  if (p.mode === 'knocked') p.knockT += dt;
-
-  const hs = Math.hypot(p.vx, p.vz);
-  p.speed = p.grounded ? hs : 0;
-  p.walkPhase += p.speed * dt * 3.2;
-  p.landK *= Math.exp(-dt * 8);
-}
-
-export function geyserHop(p, strength) {
-  if (p.grounded && p.mode === 'ok') { p.vy = strength; p.grounded = false; }
 }

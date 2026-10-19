@@ -104,7 +104,7 @@ class Particles {
       this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
       const r = this.age[i] / this.life[i];
       this.aSize[i] = this.size0[i] + (this.size1[i] - this.size0[i]) * (1 - (1 - r) * (1 - r));
-      this.aAlpha[i] = this.kind === 'gas' ? Math.min(1, r * 10) * (1 - r * r) * 0.9 : (1 - r);
+      this.aAlpha[i] = this.kind === 'gas' ? Math.min(1, r * 10) * (1 - r * r) * 0.78 : (1 - r);
       i++;
     }
     this.geo.setDrawRange(0, this.n);
@@ -232,19 +232,24 @@ export class FX {
     let n = Math.floor(a);
     this.acc.set(id, a - n);
     while (n-- > 0) {
-      const sp = 3.2 + Math.random() * 2.4;
-      const jx = (Math.random() - 0.5) * 1.4, jy = (Math.random() - 0.3) * 0.9, jz = (Math.random() - 0.5) * 1.4;
+      const sp = 2.4 + Math.random() * 2.2;
+      const jx = (Math.random() - 0.5) * 1.6, jy = Math.random() * 1.2, jz = (Math.random() - 0.5) * 1.6;
       this.gas.emit(
-        bx + (Math.random() - 0.5) * 0.12, by + (Math.random() - 0.5) * 0.1, bz + (Math.random() - 0.5) * 0.12,
-        -fx * sp + jx + vx * 0.6, jy - 0.4, -fz * sp + jz + vz * 0.6,
-        1.0 + Math.random() * 0.9, 0.35 + Math.random() * 0.15, 1.5 + Math.random() * 1.2, Math.random() * 0.6,
+        bx + (Math.random() - 0.5) * 0.4, by + Math.random() * 0.1, bz + (Math.random() - 0.5) * 0.4,
+        -fx * sp + jx + vx * 0.6, jy + 0.5, -fz * sp + jz + vz * 0.6,
+        0.9 + Math.random() * 0.8, 0.3 + Math.random() * 0.15, 1.0 + Math.random() * 0.9, Math.random() * 0.6,
       );
     }
     const r = (this.acc.get(id + ':r') || 0) + dt;
-    if (r > 0.22) {
+    if (r > 0.16) {
       this.acc.set(id + ':r', 0);
-      this.rings.add(bx - fx * 1.9, waterY, bz - fz * 1.9, 1.3 + Math.random() * 0.6, 1.3);
+      this.rings.add(bx - fx * (0.4 + Math.random()), waterY, bz - fz * (0.4 + Math.random()), 0.9 + Math.random() * 0.7, 1.1);
     } else this.acc.set(id + ':r', r);
+    const bub = Math.floor(dt * 40 + Math.random());
+    for (let i = 0; i < bub; i++) {
+      this.spray.emit(bx - fx * Math.random() * 0.8 + (Math.random() - 0.5) * 0.6, waterY + 0.02, bz - fz * Math.random() * 0.8 + (Math.random() - 0.5) * 0.6,
+        (Math.random() - 0.5) * 0.6, 1.4 + Math.random() * 1.6, (Math.random() - 0.5) * 0.6, 0.35 + Math.random() * 0.2, 0.16, 0.05);
+    }
   }
 
   puff(x, y, z, fx, fz) {

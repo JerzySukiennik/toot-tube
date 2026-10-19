@@ -1,12 +1,11 @@
 // Toot Tube: every tuning number in one place.
 
 export const RAFT = {
-  R: 2.0,
-  ringR: 1.62,
-  tubeR: 0.38,
-  deckR: 1.24,
-  deckY: 0.22,
-  tubeCY: 0.34,
+  R: 2.3,
+  ringR: 1.55,
+  tubeR: 0.26,
+  tubeCY: 0.2,
+  hangR: 2.12,
 };
 
 export const PHYS = {
@@ -26,19 +25,16 @@ export const PHYS = {
 export const THRUST_MULT = [1, 1.65, 1.2, 1.0];
 
 export const PLAYER = {
-  radius: 0.34,
-  height: 0.95,
-  walk: 3.3,
-  fartWalk: 0.5,
-  accel: 13,
-  airControl: 0.18,
-  jumpV: 5.2,
+  height: 1.25,
+  swim: 2.7,
+  fartSwim: 0.55,
+  accel: 9,
+  hangY: -0.5,
+  duckY: -1.35,
+  breath: 1.6,
+  breathRegen: 0.9,
+  sectorPad: 0.2,
   gravity: 12.5,
-  rMax: 1.9,
-  airFart: 5.0,
-  airLift: 4.5,
-  coyote: 0.1,
-  jumpBuffer: 0.14,
 };
 
 export const GAS = {

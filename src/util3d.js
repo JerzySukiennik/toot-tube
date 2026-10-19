@@ -34,9 +34,9 @@ export function place(geo, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1
   return geo;
 }
 
-export function merged(parts) {
+export function merged(parts, flat = false) {
   const g = mergeGeometries(parts, false);
-  g.computeVertexNormals();
+  if (flat) g.computeVertexNormals();
   return g;
 }
 

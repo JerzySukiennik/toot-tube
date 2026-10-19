@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import { paint, place, merged } from './util3d.js';
+import { stripeTexture } from './world.js';
 import { doorsClose, geyserState } from './sim.js';
 
 const PURPLE = '#7b3ff2';
@@ -64,19 +65,8 @@ function buoyGeometry() {
 }
 
 function donutGeometry() {
-  const g = new THREE.TorusGeometry(1.12, 0.38, 12, 28).toNonIndexed();
-  const p = g.attributes.position;
-  const col = new Float32Array(p.count * 3);
-  const A = new THREE.Color('#4fe0b0'), B = new THREE.Color('#ffffff');
-  for (let i = 0; i < p.count; i += 3) {
-    const cx = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, cy = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3;
-    const c = Math.floor(((Math.atan2(cy, cx) + Math.PI) / (Math.PI * 2)) * 8) % 2 ? A : B;
-    for (let k = 0; k < 3; k++) { col[(i + k) * 3] = c.r; col[(i + k) * 3 + 1] = c.g; col[(i + k) * 3 + 2] = c.b; }
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.deleteAttribute('uv');
+  const g = new THREE.TorusGeometry(1.12, 0.36, 28, 72);
   g.rotateX(Math.PI / 2);
-  g.computeVertexNormals();
   return g;
 }
 
@@ -145,6 +135,11 @@ export class HazardViews {
     const solid = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45 });
     const buoyGeo = buoyGeometry();
     const donutGeo = donutGeometry();
+    const donutTex = stripeTexture('#4fe0b0', '#ffffff');
+    donutTex.repeat.set(4, 1);
+    const donutMat = new THREE.MeshStandardMaterial({ map: donutTex, roughness: 0.3 });
+    const housingMat = new THREE.MeshStandardMaterial({ color: '#4a1fb0', roughness: 0.5 });
+    const housingGeo = new THREE.BoxGeometry(1.7, 1.5, 2.2);
     const postGeo = sweeperPost();
     const canGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.72, 20);
     const canMat = [
@@ -187,6 +182,11 @@ export class HazardViews {
           g.add(m);
           g.rotation.y = Math.atan2(-h.rz, h.rx);
           scene.add(g);
+          const box = new THREE.Mesh(housingGeo, housingMat);
+          box.position.set(h.cx + h.rx * side * (h.hw + 0.55), h.wy + 0.45, h.cz + h.rz * side * (h.hw + 0.55));
+          box.rotation.y = Math.atan2(-h.rz, h.rx);
+          box.castShadow = true;
+          scene.add(box);
           return { g, m, side };
         });
         this.items.push({ h, update: (T) => {
@@ -211,7 +211,7 @@ export class HazardViews {
           m.rotation.z = Math.sin(T * 1.3 + ph) * 0.15;
         } });
       } else if (h.type === 'donut') {
-        const m = new THREE.Mesh(donutGeo, solid);
+        const m = new THREE.Mesh(donutGeo, donutMat);
         m.castShadow = true;
         m.position.set(h.x, h.wy + 0.1, h.z);
         scene.add(m);
@@ -231,7 +231,7 @@ export class HazardViews {
         post.castShadow = true;
         scene.add(post);
         const arms = new THREE.Mesh(sweeperArms(h.len, h.arms), solid);
-        arms.position.set(h.x, h.wy + 0.87, h.z);
+        arms.position.set(h.x, h.wy + 0.65, h.z);
         arms.castShadow = true;
         scene.add(arms);
         const ring = new THREE.Mesh(new THREE.RingGeometry(h.len - 0.12, h.len + 0.12, 64), ringMat);

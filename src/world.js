@@ -49,7 +49,7 @@ export function buildWorld(scene, track, haz) {
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
   sc.left = -26; sc.right = 26; sc.top = 26; sc.bottom = -26; sc.near = 5; sc.far = 140;
-  sun.shadow.bias = -0.0004;
+  sun.shadow.bias = -0.0009;
   sun.shadow.normalBias = 0.035;
   scene.add(sun);
   scene.add(sun.target);
@@ -67,6 +67,7 @@ export function buildWorld(scene, track, haz) {
   buildDecor(scene, track, field);
   world.clouds = buildClouds(scene, track);
   world.arches = buildArches(scene, track);
+  world.beacons = buildBeacons(scene, track);
   buildSigns(scene, track);
 
   world.update = (dt, focus, cam) => {
@@ -81,6 +82,7 @@ export function buildWorld(scene, track, haz) {
     sun.target.position.z = sun.position.z - sunOff.z;
     world.clouds.position.x += dt * 0.6;
     for (const a of world.arches) a.update(dt);
+    for (const b of world.beacons) b.update(dt, cam);
   };
   return world;
 }
@@ -163,7 +165,7 @@ function buildWater(scene, track, haz, uTime) {
   const index = [];
   for (let r = 0; r < rows - 1; r++) for (let k = 0; k < NX; k++) {
     const a = r * (NX + 1) + k, b = a + 1, c = a + NX + 1, d = c + 1;
-    index.push(a, c, b, b, c, d);
+    index.push(a, b, c, b, d, c);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -312,20 +314,18 @@ function buildBanks(scene, track) {
     m.receiveShadow = true;
     scene.add(m);
 
-    const RS = 12, rad = 0.42;
-    const tp = [], tc = [], tn = [], ti = [];
-    const cA = new THREE.Color('#ffd23f'), cB = new THREE.Color('#ffffff');
+    const RS = 14, rad = 0.42;
+    const tp = [], tn = [], tu = [], ti = [];
     for (let r = 0; r < rows; r++) {
       const i = Math.min(track.n - 1, r * stepI);
       const rx = -track.TZ[i] * side, rz = track.TX[i] * side, hw = track.HW[i];
       const cx = track.X[i] + rx * (hw + 0.05), cz = track.Z[i] + rz * (hw + 0.05), cy = track.Y[i] + 0.2;
-      const stripe = Math.floor((i * DS) / 1.5) % 2 ? cA : cB;
       for (let k = 0; k <= RS; k++) {
         const t = (k / RS) * Math.PI * 2;
         const nx = rx * Math.cos(t), ny = Math.sin(t), nz = rz * Math.cos(t);
         tp.push(cx + nx * rad, cy + ny * rad, cz + nz * rad);
         tn.push(nx, ny, nz);
-        tc.push(stripe.r, stripe.g, stripe.b);
+        tu.push((i * DS) / 3, k / RS);
       }
     }
     for (let r = 0; r < rows - 1; r++) for (let k = 0; k < RS; k++) {
@@ -335,12 +335,25 @@ function buildBanks(scene, track) {
     const tg = new THREE.BufferGeometry();
     tg.setAttribute('position', new THREE.Float32BufferAttribute(tp, 3));
     tg.setAttribute('normal', new THREE.Float32BufferAttribute(tn, 3));
-    tg.setAttribute('color', new THREE.Float32BufferAttribute(tc, 3));
+    tg.setAttribute('uv', new THREE.Float32BufferAttribute(tu, 2));
     tg.setIndex(ti);
-    const tm = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, side: THREE.DoubleSide }));
+    const tm = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ map: stripeTexture('#ffd23f', '#ffffff'), roughness: 0.4, side: THREE.DoubleSide }));
     tm.receiveShadow = true;
     scene.add(tm);
   }
+}
+
+export function stripeTexture(a, b) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 4;
+  const g = c.getContext('2d');
+  g.fillStyle = a; g.fillRect(0, 0, 128, 4);
+  g.fillStyle = b; g.fillRect(128, 0, 128, 4);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
 }
 
 function buildCaps(scene, track) {
@@ -557,7 +570,7 @@ function buildClouds(scene, track) {
     const s = 3 + r() * 3;
     parts.push(place(paint(new THREE.IcosahedronGeometry(s, 1), '#ffffff'), { x: (k - 2.5) * 3.2 + r() * 2, y: r() * 1.5, z: (r() - 0.5) * 4, sy: 0.7 }));
   }
-  const geo = merged(parts);
+  const geo = merged(parts, true);
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xdff4ff, emissiveIntensity: 0.55, flatShading: true, fog: false });
   const b = track.bounds;
   const list = [];
@@ -591,7 +604,7 @@ function buildArches(scene, track) {
     const f = track.at(d.s, {});
     const g = new THREE.Group();
     const span = f.hw + 1.3;
-    const H = 6.4;
+    const H = 10.4;
     const pg = pillar(H);
     for (const side of [-1, 1]) {
       const p = new THREE.Mesh(pg, pmat);
@@ -644,6 +657,67 @@ function buildArches(scene, track) {
     });
   }
   return arches;
+}
+
+function buildBeacons(scene, track) {
+  const out = [];
+  const list = CHECKPOINTS.slice(1).map((s, i) => ({ s, label: String(i + 1) }));
+  list.push({ s: FINISH_S, label: 'FINISH', finish: true });
+  const gem = new THREE.OctahedronGeometry(1.7, 0);
+  gem.scale(0.75, 1.1, 0.75);
+  const beamGeo = new THREE.CylinderGeometry(0.55, 1.6, 1, 24, 1, true);
+  beamGeo.translate(0, 0.5, 0);
+  for (const d of list) {
+    const f = track.at(d.s, {});
+    const g = new THREE.Group();
+    g.position.set(f.x, f.y, f.z);
+    const gemMat = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ff9a1f', emissiveIntensity: 0.55, roughness: 0.25, metalness: 0.1, fog: false });
+    const gm = new THREE.Mesh(gem, gemMat);
+    gm.position.y = 6.5;
+    g.add(gm);
+    const beamMat = new THREE.MeshBasicMaterial({ color: '#ffe066', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide, fog: false, blending: THREE.AdditiveBlending });
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.scale.y = 5.6;
+    beam.position.y = 0.4;
+    g.add(beam);
+    const tex = textTexture(d.label, { w: 512, h: 256, bg: null, fg: '#ffffff', size: d.finish ? 120 : 190 });
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, fog: false, transparent: true, depthWrite: false }));
+    spr.scale.set(d.finish ? 8 : 6, d.finish ? 4 : 3, 1);
+    spr.position.y = 9.6;
+    g.add(spr);
+    const outline = textTexture(d.label, { w: 512, h: 256, bg: null, fg: '#1d2b53', size: d.finish ? 120 : 190 });
+    const sh = new THREE.Sprite(new THREE.SpriteMaterial({ map: outline, fog: false, transparent: true, depthWrite: false }));
+    sh.scale.copy(spr.scale).multiplyScalar(1.08);
+    sh.position.y = 9.45;
+    sh.renderOrder = -1;
+    g.add(sh);
+    scene.add(g);
+    let state = 'idle', t = Math.random() * 5, shown = 1;
+    const COL = { next: ['#ffd23f', '#ff9a1f', '#ffe066'], idle: ['#ffffff', '#9fdcff', '#ffffff'], done: ['#6fe08a', '#2fb24a', '#a6f0b6'] };
+    out.push({
+      s: d.s, finish: !!d.finish, group: g,
+      set(st) {
+        if (st === state) return;
+        state = st;
+        const c = COL[st];
+        gemMat.color.set(c[0]); gemMat.emissive.set(c[1]); beamMat.color.set(c[2]);
+      },
+      update(dt, cam) {
+        t += dt;
+        const target = state === 'done' ? 0 : 1;
+        shown += (target - shown) * Math.min(1, dt * (state === 'done' ? 7 : 3));
+        g.visible = shown > 0.02;
+        const pulse = state === 'next' ? 1 + Math.sin(t * 4) * 0.08 : 1;
+        gm.rotation.y = t * (state === 'next' ? 1.6 : 0.6);
+        gm.position.y = 6.5 + Math.sin(t * 1.6) * 0.35;
+        gm.scale.setScalar(shown * pulse);
+        beamMat.opacity = (state === 'next' ? 0.32 + Math.sin(t * 4) * 0.08 : 0.14) * shown;
+        spr.scale.set((d.finish ? 8 : 6) * shown, (d.finish ? 4 : 3) * shown, 1);
+        sh.scale.copy(spr.scale).multiplyScalar(1.08);
+      },
+    });
+  }
+  return out;
 }
 
 function buildSigns(scene, track) {
