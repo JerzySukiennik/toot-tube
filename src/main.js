@@ -728,7 +728,8 @@ function updateViews(dt, now) {
   const inRun = G.mode === 'run' || G.mode === 'done';
   world.beacons.forEach((b, i) => {
     const idx = i + 1;
-    b.set(!inRun ? 'idle' : idx <= cp || (b.finish && G.mode === 'done') ? 'done' : idx === cp + 1 ? 'next' : 'idle');
+    const near = inRun && R.s > b.s - 16;
+    b.set(!inRun ? 'idle' : idx <= cp || near || (b.finish && G.mode === 'done') ? 'done' : idx === cp + 1 ? 'next' : 'idle');
   });
 }
 
