@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { DS, CHECKPOINTS, FINISH_S, START_S, HAZARDS } from './track.js';
-import { paint, place, merged, rng, textTexture, smoothstep } from './util3d.js';
+import { paint, place, merged, rng, textTexture, smoothstep, mergeGeometries } from './util3d.js';
 
 const SKY_TOP = new THREE.Color('#2a9bf0');
 const SKY_HOR = new THREE.Color('#cdf1ff');
@@ -74,6 +74,13 @@ export function buildWorld(scene, track, haz) {
   world.clouds = buildClouds(scene, track);
   buildDecor(scene, track, cull);
   world.arches = buildArches(scene, track);
+  world.crowds = buildCrowds(scene, track, cull);
+  for (const a of world.arches) {
+    const c = world.crowds.find((k) => Math.abs(k.s - a.s) < 1);
+    if (!c) continue;
+    const hit = a.hit;
+    a.hit = () => { hit(); c.cheer = 1; };
+  }
   world.beacons = buildBeacons(scene, track);
   buildSigns(scene, track, cull);
   for (const a of world.arches) cull.push({ obj: a.group, s: a.s, ahead: 330, behind: 60 });
@@ -94,6 +101,7 @@ export function buildWorld(scene, track, haz) {
     sun.target.position.z = sun.position.z - sunOff.z;
     world.clouds.position.x += dt * 0.6;
     for (const a of world.arches) a.update(dt);
+    for (const c of world.crowds) if (c.s - s < 120 && c.s - s > -40) c.pose(dt);
     for (const b of world.beacons) b.update(dt, cam, s);
   };
   return world;
@@ -508,20 +516,84 @@ function buildDecor(scene, track, cull) {
   }
   chunked(scene, cull, paint(new THREE.CylinderGeometry(0.35, 0.35, 1, 6), '#ffffff'), tintMat, chain);
 
-  const blobGeo = paint(new THREE.SphereGeometry(0.32, 8, 6), '#ffffff');
-  const blobMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+}
+
+function fanGeometry() {
+  const body = new THREE.CapsuleGeometry(0.27, 0.42, 6, 14);
+  body.translate(0, 0.48, 0);
+  const parts = [body];
+  for (const sd of [-1, 1]) {
+    const arm = new THREE.CapsuleGeometry(0.075, 0.34, 4, 8);
+    arm.translate(0, 0.17, 0);
+    arm.rotateZ(sd * -0.55);
+    arm.translate(sd * 0.25, 0.62, 0);
+    parts.push(arm);
+  }
+  const g = mergeGeometries(parts.map((p) => p.index ? p.toNonIndexed() : p).map((p) => { p.deleteAttribute('uv'); return p; }), false);
+  return g;
+}
+
+function fanFace() {
+  const parts = [];
+  for (const sd of [-1, 1]) {
+    parts.push(place(paint(new THREE.SphereGeometry(0.085, 12, 10), '#ffffff'), { x: sd * 0.1, y: 0.68, z: 0.235, sz: 0.6 }));
+    parts.push(place(paint(new THREE.SphereGeometry(0.045, 10, 8), '#1d2b53'), { x: sd * 0.1, y: 0.68, z: 0.282, sz: 0.5 }));
+  }
+  const mouth = paint(new THREE.TorusGeometry(0.07, 0.018, 6, 14, Math.PI), '#1d2b53');
+  place(mouth, { y: 0.57, z: 0.255, rz: Math.PI });
+  parts.push(mouth);
+  return merged(parts);
+}
+
+function buildCrowds(scene, track, cull) {
+  const bodyGeo = fanGeometry();
+  const faceGeo = fanFace();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const faceMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const palette = ['#ff8c62', '#7fd3ff', '#7be38b', '#ff8fbd', '#ffc93c', '#b9a4ff', '#ffffff'];
+  const r = rng(77);
+  const crowds = [];
   for (const cs of [...CHECKPOINTS.slice(1), FINISH_S]) {
-    const list = [];
-    for (let i = -3; i <= 3; i++) {
+    const fans = [];
+    for (let i = -4; i <= 4; i++) {
       for (const sg of [-1, 1]) {
-        const s = cs + i * 2 + (sg > 0 ? 0.6 : 0);
-        const f = track.at(s, {});
-        list.push({ x: f.x - f.tz * sg * (f.hw + RIM), y: f.y + TOP + 0.75, z: f.z + f.tx * sg * (f.hw + RIM), color: candy[(i + 3 + (sg > 0 ? 2 : 0)) % candy.length] });
+        const s0 = cs + i * 1.6 + (sg > 0 ? 0.5 : 0) + (r() - 0.5) * 0.4;
+        const f = track.at(s0, {});
+        const lat = sg * (f.hw + RIM + 0.1);
+        const dx = f.tz * sg, dz = -f.tx * sg;
+        fans.push({ x: f.x - f.tz * lat, y: f.y + TOP + 0.38, z: f.z + f.tx * lat, ry: Math.atan2(dx, dz), ph: r() * 6.28, sp: 5 + r() * 3, s: 0.85 + r() * 0.35 });
       }
     }
-    const im = inst(scene, blobGeo, blobMat, list);
-    cull.push({ obj: im, s: cs, ahead: 330, behind: 60 });
+    const bodies = new THREE.InstancedMesh(bodyGeo, bodyMat, fans.length);
+    const faces = new THREE.InstancedMesh(faceGeo, faceMat, fans.length);
+    fans.forEach((fn, i) => bodies.setColorAt(i, new THREE.Color(palette[Math.floor(r() * palette.length)])));
+    bodies.instanceColor.needsUpdate = true;
+    for (const m of [bodies, faces]) { m.castShadow = true; m.frustumCulled = false; scene.add(m); }
+    const crowd = { s: cs, fans, bodies, faces, cheer: 0, t: 0 };
+    crowd.pose = (dt) => {
+      crowd.t += dt;
+      crowd.cheer = Math.max(0, crowd.cheer - dt * 0.18);
+      const amp = 0.06 + crowd.cheer * 0.55;
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+      fans.forEach((fn, i) => {
+        const hop = Math.abs(Math.sin(crowd.t * (fn.sp + crowd.cheer * 4) + fn.ph)) * amp;
+        const sway = Math.sin(crowd.t * 2.2 + fn.ph) * (0.06 + crowd.cheer * 0.25);
+        e.set(0, fn.ry, sway);
+        q.setFromEuler(e);
+        const sq = 1 + (hop < 0.02 ? 0.06 : -0.04) * (crowd.cheer + 0.3);
+        m.compose(v.set(fn.x, fn.y + hop, fn.z), q, sc.set(fn.s / Math.sqrt(sq), fn.s * sq, fn.s / Math.sqrt(sq)));
+        bodies.setMatrixAt(i, m);
+        faces.setMatrixAt(i, m);
+      });
+      bodies.instanceMatrix.needsUpdate = true;
+      faces.instanceMatrix.needsUpdate = true;
+    };
+    crowd.pose(0);
+    cull.push({ obj: bodies, s: cs, ahead: 330, behind: 60 });
+    cull.push({ obj: faces, s: cs, ahead: 330, behind: 60 });
+    crowds.push(crowd);
   }
+  return crowds;
 }
 
 function buildArches(scene, track) {
