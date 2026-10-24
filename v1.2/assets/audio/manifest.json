@@ -1,0 +1,222 @@
+{
+ "toots": [
+  {
+   "file": "toot_00.mp3",
+   "dur": 0.4,
+   "src": 202528
+  },
+  {
+   "file": "toot_01.mp3",
+   "dur": 0.75,
+   "src": 202528
+  },
+  {
+   "file": "toot_02.mp3",
+   "dur": 1.49,
+   "src": 202528
+  },
+  {
+   "file": "toot_03.mp3",
+   "dur": 1.87,
+   "src": 202528
+  },
+  {
+   "file": "toot_04.mp3",
+   "dur": 0.99,
+   "src": 555418
+  },
+  {
+   "file": "toot_05.mp3",
+   "dur": 0.6,
+   "src": 163386
+  },
+  {
+   "file": "toot_06.mp3",
+   "dur": 0.59,
+   "src": 645339
+  },
+  {
+   "file": "toot_07.mp3",
+   "dur": 0.33,
+   "src": 610067
+  },
+  {
+   "file": "toot_08.mp3",
+   "dur": 1.39,
+   "src": 94989
+  },
+  {
+   "file": "toot_09.mp3",
+   "dur": 1.31,
+   "src": 183549
+  },
+  {
+   "file": "toot_10.mp3",
+   "dur": 1.81,
+   "src": 840755
+  },
+  {
+   "file": "toot_11.mp3",
+   "dur": 1.42,
+   "src": 465486
+  }
+ ],
+ "sfx": {
+  "bubbles": {
+   "file": "bubbles.mp3",
+   "dur": 1.94
+  },
+  "bubbles_small": {
+   "file": "bubbles_small.mp3",
+   "dur": 0.76
+  },
+  "splash_big": {
+   "file": "splash_big.mp3",
+   "dur": 2.05
+  },
+  "splash_dive": {
+   "file": "splash_dive.mp3",
+   "dur": 1.28
+  },
+  "splash_tiny": {
+   "file": "splash_tiny.mp3",
+   "dur": 1.04
+  },
+  "splash_mid": {
+   "file": "splash_mid.mp3",
+   "dur": 0.91
+  },
+  "deflate": {
+   "file": "deflate.mp3",
+   "dur": 1.95
+  },
+  "pop": {
+   "file": "pop.mp3",
+   "dur": 0.36
+  },
+  "hiss": {
+   "file": "hiss.mp3",
+   "dur": 2.09
+  },
+  "boing": {
+   "file": "boing.mp3",
+   "dur": 0.15
+  },
+  "boing2": {
+   "file": "boing2.mp3",
+   "dur": 0.41
+  },
+  "can": {
+   "file": "can.mp3",
+   "dur": 0.63
+  },
+  "geyser": {
+   "file": "geyser.mp3",
+   "dur": 2.59
+  },
+  "sad": {
+   "file": "sad.mp3",
+   "dur": 4.68
+  },
+  "bump1": {
+   "file": "bump1.mp3",
+   "dur": 0.65
+  },
+  "bump2": {
+   "file": "bump2.mp3",
+   "dur": 0.35
+  },
+  "bump3": {
+   "file": "bump3.mp3",
+   "dur": 0.18
+  },
+  "knock": {
+   "file": "knock.mp3",
+   "dur": 0.43
+  },
+  "whistle": {
+   "file": "whistle.mp3",
+   "dur": 1.28
+  },
+  "click": {
+   "file": "click.mp3",
+   "dur": 0.08
+  },
+  "tick": {
+   "file": "tick.mp3",
+   "dur": 0.55
+  },
+  "go": {
+   "file": "go.mp3",
+   "dur": 1.25
+  },
+  "gulp": {
+   "file": "gulp.mp3",
+   "dur": 0.55
+  },
+  "ding": {
+   "file": "ding.mp3",
+   "dur": 1.03
+  },
+  "cheer": {
+   "file": "cheer.mp3",
+   "dur": 3.6
+  },
+  "cheer_big": {
+   "file": "cheer_big.mp3",
+   "dur": 6.0
+  },
+  "voice_pig": {
+   "file": "voice_pig.mp3",
+   "dur": 0.74
+  },
+  "voice_duck": {
+   "file": "voice_duck.mp3",
+   "dur": 0.25
+  },
+  "voice_frog": {
+   "file": "voice_frog.mp3",
+   "dur": 0.61
+  },
+  "voice_penguin": {
+   "file": "voice_penguin.mp3",
+   "dur": 0.56
+  },
+  "voice_capybara": {
+   "file": "voice_capybara.mp3",
+   "dur": 1.09
+  },
+  "whoosh": {
+   "file": "whoosh.mp3",
+   "dur": 0.22
+  },
+  "whoosh2": {
+   "file": "whoosh2.mp3",
+   "dur": 0.21
+  }
+ },
+ "loops": {
+  "river": {
+   "file": "river.mp3",
+   "dur": 26.0
+  },
+  "rapids": {
+   "file": "rapids.mp3",
+   "dur": 9.0
+  },
+  "waterfall": {
+   "file": "waterfall.mp3",
+   "dur": 12.0
+  }
+ },
+ "music": {
+  "music_menu": {
+   "file": "music_menu.mp3",
+   "dur": 34.0
+  },
+  "music_run": {
+   "file": "music_run.mp3",
+   "dur": 125.07
+  }
+ }
+}
