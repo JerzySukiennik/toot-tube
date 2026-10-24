@@ -94,7 +94,11 @@ export class Sound {
     this.master.gain.value = this.muted ? 0 : 0.9;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
-    this.master.connect(comp).connect(ctx.destination);
+    this.muffle = ctx.createBiquadFilter();
+    this.muffle.type = 'lowpass';
+    this.muffle.frequency.value = 20000;
+    this.muffle.Q.value = 0.7;
+    this.master.connect(this.muffle).connect(comp).connect(ctx.destination);
     this.sfxBus = ctx.createGain(); this.sfxBus.connect(this.master);
     this.musicBus = ctx.createGain(); this.musicBus.gain.value = this.musicOn ? 0.32 : 0; this.musicBus.connect(this.master);
     this.noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
@@ -171,6 +175,12 @@ export class Sound {
     const t = this.ctx.currentTime;
     this.tracks.menu.g.gain.setTargetAtTime(scene === 'menu' ? 0.9 : 0, t, 0.6);
     this.tracks.run.g.gain.setTargetAtTime(scene === 'run' ? 0.75 : 0, t, 0.6);
+  }
+
+  setUnderwater(on) {
+    if (!this.muffle || this.underwater === on) return;
+    this.underwater = on;
+    this.muffle.frequency.setTargetAtTime(on ? 520 : 20000, this.ctx.currentTime, on ? 0.04 : 0.12);
   }
 
   setMuted(m) {
@@ -446,15 +456,16 @@ export class Sound {
       case 'boing': S('boing2', { vol: 0.8 * v, rate: r(0.9, 1.1) }); S('splash_mid', { vol: 0.3 * v }); return true;
       case 'splash': S('splash_big', { vol: 1.8 * v, rate: r(0.92, 1.05) }); S('splash_mid', { vol: 0.8 * v, delay: 0.05 }); return true;
       case 'pop': S('pop', { vol: 1.0 * v }); S('deflate', { vol: 0.8 * v, delay: 0.06 }); S('hiss', { vol: 0.4 * v, delay: 0.1 }); return true;
-      case 'knock': S('knock', { vol: 0.9 * v }); return true;
-      case 'bean': S('can', { vol: 0.8 * v }); S('powerup', { vol: 0.45 * v, delay: 0.12 }); return true;
-      case 'checkpoint': S('checkpoint', { vol: 0.9 * v }); return true;
-      case 'finish': S('finish', { vol: 1.0 * v }); S('checkpoint', { vol: 0.6 * v, delay: 1.4 }); return true;
-      case 'beep': S(o.go ? 'go' : 'tick', { vol: (o.go ? 0.8 : 0.55) * v }); return true;
+      case 'knock': S('knock', { vol: 0.9 * v, rate: r(0.9, 1.1) }); S('whistle', { vol: 0.45 * v, delay: 0.18 }); return true;
+      case 'bean': S('can', { vol: 0.8 * v }); S('gulp', { vol: 0.75 * v, delay: 0.28, rate: r(0.95, 1.15) }); return true;
+      case 'checkpoint': S('ding', { vol: 0.8 * v }); S('cheer', { vol: 0.75 * v, delay: 0.1 }); return true;
+      case 'finish': S('go', { vol: 0.8 * v }); S('cheer_big', { vol: 0.9 * v, delay: 0.15 }); S('ding', { vol: 0.6 * v, delay: 0.5 }); return true;
+      case 'beep': S(o.go ? 'go' : 'tick', { vol: (o.go ? 0.75 : 0.5) * v }); return true;
+      case 'voice': S(`voice_${o.kind}`, { vol: 0.8 * v, rate: (o.rate || 1) * r(0.92, 1.1), pan }); return true;
       case 'click': S('click', { vol: 0.6 * v }); return true;
       case 'geyser': S('geyser', { vol: 0.7 * v, rate: r(0.95, 1.08) }); return true;
       case 'wipe': S('sad', { vol: 0.55 * v }); return true;
-      case 'barrier': S('barrier', { vol: 0.6 * v, rate: r(0.9, 1.1) }); return true;
+      case 'barrier': S('bump1', { vol: 0.5 * v, rate: r(1.3, 1.5) }); return true;
       case 'blub': S('splash_dive', { vol: 0.7 * v, rate: r(0.95, 1.1) }); S('bubbles_small', { vol: 0.4 * v, delay: 0.08 }); return true;
       case 'surface': S('splash_tiny', { vol: 0.7 * v, rate: r(0.95, 1.15) }); return true;
       case 'bubble': {

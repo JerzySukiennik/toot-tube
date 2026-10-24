@@ -120,47 +120,71 @@
   },
   "bump1": {
    "file": "bump1.mp3",
-   "dur": 0.53
+   "dur": 0.65
   },
   "bump2": {
    "file": "bump2.mp3",
-   "dur": 0.57
+   "dur": 0.35
   },
   "bump3": {
    "file": "bump3.mp3",
-   "dur": 0.5
-  },
-  "barrier": {
-   "file": "barrier.mp3",
    "dur": 0.18
   },
   "knock": {
    "file": "knock.mp3",
-   "dur": 0.54
+   "dur": 0.43
+  },
+  "whistle": {
+   "file": "whistle.mp3",
+   "dur": 1.28
   },
   "click": {
    "file": "click.mp3",
-   "dur": 0.04
+   "dur": 0.08
   },
   "tick": {
    "file": "tick.mp3",
-   "dur": 0.68
+   "dur": 0.55
   },
   "go": {
    "file": "go.mp3",
+   "dur": 1.25
+  },
+  "gulp": {
+   "file": "gulp.mp3",
    "dur": 0.55
   },
-  "powerup": {
-   "file": "powerup.mp3",
-   "dur": 0.55
+  "ding": {
+   "file": "ding.mp3",
+   "dur": 1.03
   },
-  "checkpoint": {
-   "file": "checkpoint.mp3",
-   "dur": 1.26
+  "cheer": {
+   "file": "cheer.mp3",
+   "dur": 3.6
   },
-  "finish": {
-   "file": "finish.mp3",
-   "dur": 1.55
+  "cheer_big": {
+   "file": "cheer_big.mp3",
+   "dur": 6.0
+  },
+  "voice_pig": {
+   "file": "voice_pig.mp3",
+   "dur": 0.74
+  },
+  "voice_duck": {
+   "file": "voice_duck.mp3",
+   "dur": 0.25
+  },
+  "voice_frog": {
+   "file": "voice_frog.mp3",
+   "dur": 0.61
+  },
+  "voice_penguin": {
+   "file": "voice_penguin.mp3",
+   "dur": 0.56
+  },
+  "voice_capybara": {
+   "file": "voice_capybara.mp3",
+   "dur": 1.09
   }
  },
  "loops": {

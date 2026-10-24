@@ -25,6 +25,9 @@ const TIPS = [
   'Last stretch to the finish!',
 ];
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+const EMOTES = ['TOOT!', 'WAIT!', 'LEFT!', 'RIGHT!'];
+const lsGet = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
 function loadProfile() {
   let p = {};
@@ -51,7 +54,7 @@ const G = {
   wiping: null,
   paused: false,
   pauseAt: 0,
-  stats: { toots: 0 },
+  stats: { toots: 0, falls: 0 },
   scores: [],
   lastSend: 0,
   lastRaftSend: 0,
@@ -99,6 +102,8 @@ window.addEventListener('keydown', (e) => {
   if (typing()) return;
   if (e.code === 'Escape') { togglePause(); return; }
   if (e.code === 'KeyM') { sound.setMusic(!sound.musicOn); syncSoundButtons(); toast(sound.musicOn ? 'Music on' : 'Music off'); return; }
+  const em = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
+  if (em >= 0 && !e.repeat) { sendEmote(em); return; }
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (!keys.has(e.code)) pressed.add(e.code);
   keys.add(e.code);
@@ -219,7 +224,9 @@ function enterRun(m) {
   G.cpSeen = m.cp || 0;
   G.wiping = null;
   G.lastCount = null;
-  G.stats = { toots: 0 };
+  G.stats = { toots: 0, falls: 0 };
+  G.splits = [];
+  G.from = m.from || 0;
   G.raft = makeRaft(track, CHECKPOINTS[m.cp || 0]);
   Object.assign(G.corr, { x: 0, z: 0, a: 0, vx: 0, vz: 0, w: 0 });
   resetPlayer(G.me, mySlot(), playerCount());
@@ -276,7 +283,7 @@ function updateWipe(dt, now) {
   const w = G.wiping;
   if (!w) { $('iris').style.clipPath = 'circle(0% at 50% 50%)'; return; }
   const t = (now - w.wt) / 1000;
-  if (w.popped) {
+  if (w.popped && !w.reset) {
     raftView.deflate = Math.min(1, raftView.deflate + dt * 1.4);
     if (t < 1.1 && Math.random() < 0.6) {
       const a = Math.random() * Math.PI * 2;
@@ -298,7 +305,7 @@ function updateWipe(dt, now) {
     cam.yawOff = 0;
     sound.silenceAll();
   }
-  if (t >= 2.55) G.wiping = null;
+  if (t >= 2.55) { G.wiping = null; raftView.deflate = 0; }
 }
 
 function celebrate(c, popup) {
@@ -308,10 +315,91 @@ function celebrate(c, popup) {
   fx.confetti(f.x, f.y + 6, f.z);
   fx.confetti(f.x - f.tz * f.hw * 0.7, f.y + 8, f.z + f.tx * f.hw * 0.7);
   fx.confetti(f.x + f.tz * f.hw * 0.7, f.y + 8, f.z - f.tx * f.hw * 0.7);
+  const m = G.net.meta;
+  const split = G.net.serverNow() - (m.t0 || 0);
+  if (G.splits) G.splits[c] = split;
+  const reached = lsGet('tt-reached', 0);
+  if (c > reached) lsSet('tt-reached', c);
   if (!popup) return;
   sound.play('checkpoint');
-  showBig(`CHECKPOINT ${c}`, 'cp', `${c} of ${CHECKPOINTS.length - 1} · ${SECTION_NAMES[c] || ''}`, TIPS[c]);
+  voice(G.profile.animal, 1.15, 0, 350);
+  let delta = '';
+  const best = lsGet(`tt-best-${playerCount()}`, null);
+  if (!G.from && best?.splits?.[c]) {
+    const d = (split - best.splits[c]) / 1000;
+    delta = ` · ${d <= 0 ? '-' : '+'}${Math.abs(d).toFixed(1)} s vs best`;
+  }
+  showBig(`CHECKPOINT ${c}`, 'cp', `${c} of ${CHECKPOINTS.length - 1} · ${SECTION_NAMES[c] || ''}${delta}`, TIPS[c]);
   buildTicks();
+}
+
+function voice(kind, rate = 1, pan = 0, delay = 0) {
+  if (!kind) return;
+  const go = () => sound.play('voice', { kind, rate, pan });
+  if (delay) setTimeout(go, delay); else go();
+}
+
+const bubbleTex = new Map();
+function bubbleTexture(text, color) {
+  const key = text + color;
+  if (bubbleTex.has(key)) return bubbleTex.get(key);
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff';
+  g.strokeStyle = '#1d2b53';
+  g.lineWidth = 8;
+  g.beginPath();
+  g.roundRect(14, 10, 228, 84, 34);
+  g.moveTo(112, 92); g.lineTo(128, 120); g.lineTo(146, 92);
+  g.fill(); g.stroke();
+  g.fillStyle = '#ffffff';
+  g.fillRect(114, 86, 30, 8);
+  g.font = '54px "Lilita One", sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = color;
+  g.lineWidth = 10; g.strokeStyle = '#1d2b53';
+  g.strokeText(text, 128, 54);
+  g.fillText(text, 128, 54);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  bubbleTex.set(key, t);
+  return t;
+}
+
+function showEmote(view, idx, color) {
+  if (!view) return;
+  if (!view.bubble) {
+    view.bubble = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true }));
+    view.bubble.renderOrder = 12;
+    view.root.add(view.bubble);
+  }
+  view.bubble.material.map = bubbleTexture(EMOTES[idx], color);
+  view.bubble.material.needsUpdate = true;
+  view.bubble.userData.t = 0;
+  view.bubble.visible = true;
+}
+
+function tickEmotes(view, dt) {
+  const b = view?.bubble;
+  if (!b || !b.visible) return;
+  b.userData.t += dt;
+  const t = b.userData.t;
+  const pop = t < 0.18 ? t / 0.18 : 1;
+  const k = (1 + Math.sin(Math.min(1, pop) * Math.PI) * 0.25) * Math.min(1, pop * 1.2);
+  const fade = t > 1.9 ? Math.max(0, 1 - (t - 1.9) / 0.3) : 1;
+  b.scale.set(1.5 * k, 0.75 * k, 1);
+  b.position.y = 3.05 + Math.sin(t * 6) * 0.04;
+  b.material.opacity = fade;
+  if (t > 2.2) b.visible = false;
+}
+
+function sendEmote(idx) {
+  if (!(G.mode === 'run' || G.mode === 'lobby' || G.mode === 'done') || typing()) return;
+  G.myEmote = { i: idx, t: G.net.serverNow() };
+  showEmote(G.meView, idx, G.net.solo ? '#ffd23f' : SLOT_COLORS[mySlot() % 3]);
+  voice(G.profile.animal, [1, 0.9, 1.1, 1.2][idx]);
+  G.lastSend = 0;
 }
 
 function fmtTime(ms) {
@@ -332,7 +420,16 @@ function finishRun(m) {
   showBig('FINISH!', 'go', fmtTime(ms));
   G.mode = 'done';
   buildTicks();
-  if (G.net.isHost && ms > 60000) {
+  voice(G.profile.animal, 1.2, 0, 300);
+  const n = Math.min(3, Math.max(1, m.n || playerCount()));
+  const best = lsGet(`tt-best-${n}`, null);
+  G.newBest = false;
+  if (!G.from && (!best || ms < best.total)) {
+    G.newBest = !!best;
+    lsSet(`tt-best-${n}`, { total: Math.round(ms), splits: (G.splits || []).map((v) => Math.round(v || 0)) });
+  }
+  G.prevBest = best?.total || 0;
+  if (G.net.isHost && ms > 60000 && !G.from) {
     const names = [...G.net.players.values()].sort((a, b) => a.slot - b.slot).map((p) => p.name).join(', ');
     submitScore({ names: names.slice(0, 60), n: Math.min(3, Math.max(1, m.n || playerCount())), ms: Math.round(ms), wipes: m.wipe || 0, at: Date.now() })
       .catch((e) => console.warn('[scores] submit failed', e?.message))
@@ -342,11 +439,31 @@ function finishRun(m) {
     if (G.mode !== 'done' || G.doneShown !== m.run) return;
     $('res-time').textContent = fmtTime(ms);
     $('res-stats').innerHTML = `<span><b>${m.wipe || 0}</b> wipes</span><span><b>${G.stats.toots}</b> toots by you</span><span><b>${m.n || playerCount()}</b> on the ring</span>`;
+    $('res-best').textContent = G.from ? `Practice run from checkpoint ${G.from}, not ranked` : G.newBest ? `New personal best! ${((G.prevBest - ms) / 1000).toFixed(1)} s faster` : G.prevBest ? `Your best: ${fmtTime(G.prevBest)}` : 'First finish! That is your time to beat.';
+    renderCrewStats();
     $('btn-again').classList.toggle('hidden', !G.net.isHost);
     $('res-wait').classList.toggle('hidden', G.net.isHost);
     renderScoreList($('res-scores'), m.n || playerCount(), ms);
     showScreen('results');
   }, 2800);
+}
+
+function renderCrewStats() {
+  const rows = [];
+  const add = (name, animal, toots, falls, me) => rows.push({ name, animal, toots, falls, me });
+  add(G.profile.name, G.profile.animal, G.stats.toots, G.stats.falls, true);
+  for (const [, r] of G.remotes) add(r.name, r.animal, r.st?.tc || 0, r.st?.fc || 0, false);
+  const most = rows.reduce((a, b) => (b.toots > a.toots ? b : a), rows[0]);
+  const el = $('res-crew');
+  el.innerHTML = '';
+  for (const r of rows) {
+    const li = document.createElement('li');
+    li.innerHTML = '<i></i><span class="nm"></span><span class="st"></span>';
+    li.querySelector('i').style.background = ANIMAL_INFO[r.animal]?.color || '#ccc';
+    li.querySelector('.nm').textContent = r.name + (r.me ? ' (you)' : '') + (rows.length > 1 && r === most && r.toots > 0 ? ' · Gas Giant' : '');
+    li.querySelector('.st').textContent = `${r.toots} toot${r.toots === 1 ? '' : 's'}${r.falls ? ` · swept off ${r.falls}x` : ''}`;
+    el.append(li);
+  }
 }
 
 function stepSim(dt, inp, now) {
@@ -369,13 +486,13 @@ function stepSim(dt, inp, now) {
   const rnow = now - NET.interpDelay;
   for (const [id, r] of G.remotes) {
     r.st = sampleRemote(net.remote.get(id), rnow);
-    if (r.st) inputs.push({ lx: r.st.x, lz: r.st.z, f: r.st.f, fart: !!(r.st.m & 2), onRaft: !(r.st.m & 28) });
+    if (r.st) inputs.push({ id, lx: r.st.x, lz: r.st.z, f: r.st.f, fart: !!(r.st.m & 2), onRaft: !(r.st.m & 28) });
   }
 
   const frozen = !!G.wiping || G.paused || G.mode === 'menu';
   if (!live) { R.dvx = 0; R.dvz = 0; R.w = live ? R.w : R.w * 0.9; }
   stepPlayer(G.me, frozen ? { active: false } : inp, R, haz, G.T, dt, ev);
-  inputs.push({ lx: G.me.x, lz: G.me.z, f: G.me.f, fart: G.me.fart, onRaft: G.me.mode === 'ok' && G.me.duckK < 0.5 });
+  inputs.push({ id: net.selfId, lx: G.me.x, lz: G.me.z, f: G.me.f, fart: G.me.fart, onRaft: G.me.mode === 'ok' && G.me.duckK < 0.5 });
 
   if (live) {
     stepRaft(R, track, haz, G.T, inputs, THRUST_MULT[Math.min(3, playerCount())], dt, ev);
@@ -441,9 +558,12 @@ function handleEvent(e) {
     }
     case 'surface': sound.play('surface'); break;
     case 'fartStart': G.stats.toots++; break;
+    case 'fartEnd': if (Math.random() < 0.35) voice(G.profile.animal, 0.95 + Math.random() * 0.2, 0, 120); break;
     case 'fartEmpty': sound.play('empty'); break;
-    case 'knocked': sound.play('knock'); G.shake = Math.max(G.shake, 0.4); break;
+    case 'knocked': sound.play('knock'); voice(G.profile.animal, 1.45); G.shake = Math.max(G.shake, 0.4); break;
+    case 'kick': G.shake = Math.max(G.shake, 0.14); cam.kick = 1; break;
     case 'fell': {
+      G.stats.falls++;
       const w = worldOf(G.me);
       fx.splash(w.x, R.y, w.z, 40, 5, 3);
       sound.play('splash');
@@ -495,7 +615,19 @@ function updateViews(dt, now) {
       sound.play('splash', { vol: 0.8 });
     }
     r.wasFallen = fallen;
+    const tooting = !!(st.m & 2);
+    if (r.fartOn && !tooting && Math.random() < 0.3) voice(r.animal, 0.95 + Math.random() * 0.2, 0, 120);
+    if (!r.wasKnocked && (st.m & 4)) voice(r.animal, 1.45);
+    r.wasKnocked = !!(st.m & 4);
+    r.fartOn = tooting;
+    if (st.et && st.et !== r.lastEt) {
+      r.lastEt = st.et;
+      if (G.net.serverNow() - st.et < 3000) { showEmote(r.view, st.em || 0, SLOT_COLORS[r.slot % 3]); voice(r.animal, [1, 0.9, 1.1, 1.2][st.em || 0]); }
+    }
+    tickEmotes(r.view, dt);
   }
+  tickEmotes(G.meView, dt);
+  sound.setUnderwater(G.me.duckK > 0.55 && G.mode !== 'menu');
 
   scene.updateMatrixWorld();
   const ca = Math.cos(R.a), sa = Math.sin(R.a);
@@ -577,6 +709,9 @@ function updateCamera(dt) {
   const t = performance.now() / 1000;
   camera.position.set(cam.pos.x + Math.sin(t * 41) * s * 0.3, cam.pos.y + Math.sin(t * 37) * s * 0.25, cam.pos.z + Math.cos(t * 43) * s * 0.3);
   camera.lookAt(cam.look);
+  cam.kick = (cam.kick || 0) * Math.exp(-dt * 4);
+  const fov = 55 + Math.min(8, Math.hypot(R.vx, R.vz) * 1.1) + cam.kick * 3.5;
+  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix(); }
 }
 
 function updateHud(dt, now) {
@@ -651,7 +786,9 @@ function sendNet(now) {
     const me = G.me;
     const m = (me.fart ? 2 : 0) | (me.mode === 'knocked' ? 4 : 0) | (me.mode === 'fallen' ? 8 : 0) | (me.duck ? 16 : 0);
     const r3 = (v) => Math.round(v * 1000) / 1000;
-    net.sendState({ x: r3(me.x), z: r3(me.z), y: r3(me.y), f: r3(me.f), p: r3(me.phi), m, g: Math.round(me.gas * 100), t: now });
+    const st = { x: r3(me.x), z: r3(me.z), y: r3(me.y), f: r3(me.f), p: r3(me.phi), m, g: Math.round(me.gas * 100), tc: G.stats.toots, fc: G.stats.falls || 0, t: now };
+    if (G.myEmote) { st.em = G.myEmote.i; st.et = G.myEmote.t; }
+    net.sendState(st);
   }
   if (net.isHost && (G.mode === 'run' || G.mode === 'done') && now - G.lastRaftSend >= NET.rate * 1000) {
     G.lastRaftSend = now;
@@ -749,6 +886,7 @@ async function backToMenu() {
   $('big').className = 'big';
   sound.setScene('menu');
   showScreen('menu');
+  fillPractice();
   history.replaceState(null, '', location.pathname);
   refreshScores();
 }
@@ -816,6 +954,21 @@ function pickAnimal(kind) {
   setMyAnimal(kind);
 }
 
+function fillPractice() {
+  const reached = Math.min(CHECKPOINTS.length - 1, lsGet('tt-reached', 0));
+  const sel = $('start-cp');
+  const keep = sel.value;
+  sel.innerHTML = '';
+  for (let i = 0; i <= reached; i++) {
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = i === 0 ? 'the start (ranked)' : `checkpoint ${i} · ${SECTION_NAMES[i]}`;
+    sel.append(o);
+  }
+  sel.value = keep && Number(keep) <= reached ? keep : '0';
+  $('practice').classList.toggle('hidden', reached < 1);
+}
+
 function buildMenu() {
   $('name').value = G.profile.name;
   $('name').addEventListener('input', () => {
@@ -839,6 +992,7 @@ function buildMenu() {
   $('prev-animal').addEventListener('click', () => step(-1));
   $('next-animal').addEventListener('click', () => step(1));
   pickAnimal(G.profile.animal);
+  fillPractice();
 
   $('tabs').addEventListener('click', (e) => {
     const t = e.target.closest('button')?.dataset.tab;
@@ -869,8 +1023,9 @@ function buildMenu() {
     G.net = new SoloNet(G.profile);
     bindNet(G.net);
     syncRemotes();
-    const cp = Math.max(0, Math.min(CHECKPOINTS.length - 1, Number(params.get('cp')) || 0));
-    newRun({ cp });
+    const pick = Number($('start-cp').value) || 0;
+    const cp = Math.max(0, Math.min(CHECKPOINTS.length - 1, Number(params.get('cp')) || pick));
+    newRun({ cp, from: cp });
   });
   const online = async (fn) => {
     err('');

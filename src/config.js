@@ -10,14 +10,16 @@ export const RAFT = {
 
 export const PHYS = {
   dt: 1 / 60,
-  linDrag: 0.75,
+  linDrag: 0.58,
   quadDrag: 0.11,
-  angDrag: 1.7,
+  angDrag: 1.1,
   inertia: 1.9,
-  thrust: 3.7,
-  torqueK: 0.5,
+  thrust: 5.6,
+  torqueK: 0.55,
+  tootKick: 1.3,
+  jetWobble: 0.6,
   bankInset: 0.36,
-  wallRest: 0.45,
+  wallRest: 0.72,
   bumperRest: 0.9,
   whirlSpin: 1.6,
 };

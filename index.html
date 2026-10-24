@@ -52,6 +52,7 @@
         <button class="arrow" id="next-animal" aria-label="Next animal"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
       </div>
       <button class="btn primary" id="btn-solo">Play solo</button>
+      <div class="practice hidden" id="practice"><label for="start-cp">Practice from</label><select id="start-cp"></select></div>
       <div class="split">
         <button class="btn" id="btn-create">Create room</button>
         <div class="join">
@@ -72,6 +73,7 @@
       <div class="krow"><span class="kc wide">SPACE</span><p><b>Toot</b>Pushes the ring away from you. Toot from the back to go forward.</p></div>
       <div class="krow"><span class="kc">S</span><p><b>Duck</b>Dive under the spinning bars.</p></div>
       <div class="krow"><span class="kc">Q</span><span class="kc">E</span><p><b>Turn the camera</b><span class="kc sm">Esc</span> pauses, <span class="kc sm">M</span> music.</p></div>
+      <div class="krow"><span class="kc">1</span><span class="kc">2</span><span class="kc">3</span><span class="kc">4</span><p><b>Quick calls</b>Toot! Wait! Left! Right! pops up over your head.</p></div>
       <ul class="rules">
         <li><i style="background:#7b3ff2"></i>Purple spikes pop the ring and send everyone back to the last checkpoint.</li>
         <li><i style="background:#ffd23f"></i>Follow the yellow beacons. Bean cans refill your gas.</li>
@@ -116,6 +118,8 @@
     <div class="res-title">Made it!</div>
     <div class="res-time" id="res-time">0:00.0</div>
     <div class="res-stats" id="res-stats"></div>
+    <div class="res-best" id="res-best"></div>
+    <ul class="res-crew" id="res-crew"></ul>
     <ol id="res-scores" class="scores"></ol>
     <div class="row">
       <button class="btn primary" id="btn-again">Run again</button>

@@ -107,6 +107,14 @@ input { font: inherit; color: var(--navy); }
 .res-time { font-family: 'Lilita One', sans-serif; font-size: 76px; text-align: center; line-height: 1; color: var(--blue); }
 .res-stats { display: flex; justify-content: center; gap: 18px; font-size: 14px; color: var(--navy-2); }
 .res-stats b { color: var(--navy); font-size: 18px; }
+.res-best { text-align: center; font-size: 15px; color: var(--navy); background: #fff8d6; border-radius: 12px; padding: 8px 12px; }
+.res-crew { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.res-crew li { display: flex; align-items: center; gap: 10px; background: #f4f8ff; border-radius: 12px; padding: 8px 12px; font-size: 14px; }
+.res-crew li i { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.res-crew li .nm { flex: 1; }
+.res-crew li .st { color: var(--navy-2); }
+.practice { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--navy-2); margin-top: -2px; }
+.practice select { flex: 1; font: inherit; font-size: 14px; color: var(--navy); border: 2px solid var(--line); border-radius: 12px; padding: 7px 10px; background: #f7fbff; }
 #res-scores { max-height: 30vh; }
 
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }

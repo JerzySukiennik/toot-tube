@@ -145,10 +145,23 @@ export function stepRaft(raft, track, haz, T, inputs, mult, dt, ev) {
 
   let ax = 0, az = 0, torque = 0;
   const ca = Math.cos(raft.a), sa = Math.sin(raft.a);
+  raft.jets ||= {};
   for (const p of inputs) {
-    if (!p.fart || !p.onRaft) continue;
-    const fwa = p.f + raft.a;
-    const Fx = Math.sin(fwa) * PHYS.thrust * mult, Fz = Math.cos(fwa) * PHYS.thrust * mult;
+    const key = p.id || 'me';
+    if (!p.fart || !p.onRaft) { delete raft.jets[key]; continue; }
+    let jet = raft.jets[key];
+    if (!jet) {
+      const seed = Math.sin((raft.x * 12.9898 + raft.z * 78.233 + key.length * 37.7) * 43758.5453);
+      jet = raft.jets[key] = { off: (seed - Math.floor(seed) - 0.5) * PHYS.jetWobble, t: 0 };
+      const ka = p.f + raft.a;
+      raft.vx += Math.sin(ka) * PHYS.tootKick * mult;
+      raft.vz += Math.cos(ka) * PHYS.tootKick * mult;
+      ev.push({ type: 'kick', id: key });
+    }
+    jet.t += dt;
+    const surge = 1 + 0.35 * Math.sin(jet.t * 23 + jet.off * 40);
+    const fwa = p.f + raft.a + jet.off + Math.sin(jet.t * 7.3) * 0.12;
+    const Fx = Math.sin(fwa) * PHYS.thrust * mult * surge, Fz = Math.cos(fwa) * PHYS.thrust * mult * surge;
     const rx = p.lx * ca + p.lz * sa, rz = -p.lx * sa + p.lz * ca;
     ax += Fx; az += Fz;
     torque += (rz * Fx - rx * Fz) * PHYS.torqueK;
@@ -201,7 +214,7 @@ export function stepRaft(raft, track, haz, T, inputs, mult, dt, ev) {
     if (Math.abs(h.s - L2.s) > 22) continue;
     if (h.type === 'donut' || h.type === 'sweeper') {
       const r = h.type === 'donut' ? 1.15 : 0.55;
-      const rest = h.type === 'donut' ? 1.15 : 0.6;
+      const rest = h.type === 'donut' ? 1.45 : 0.7;
       const dx = raft.x - h.x, dz = raft.z - h.z;
       const d = Math.hypot(dx, dz);
       if (d < R + r && d > 0.001) {
@@ -210,7 +223,7 @@ export function stepRaft(raft, track, haz, T, inputs, mult, dt, ev) {
         const vn = raft.vx * nx + raft.vz * nz;
         if (vn < 0) {
           raft.vx -= nx * vn * (1 + rest); raft.vz -= nz * vn * (1 + rest);
-          if (h.type === 'donut') { raft.vx += nx * 0.8; raft.vz += nz * 0.8; }
+          if (h.type === 'donut') { raft.vx += nx * 2.2; raft.vz += nz * 2.2; raft.w += (Math.random() - 0.5) * 3; }
           ev.push({ type: 'bump', mag: -vn + 0.5, x: h.x + nx * r, z: h.z + nz * r, y: L2.y, donut: h.type === 'donut' });
         }
       }
