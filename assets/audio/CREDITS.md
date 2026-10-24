@@ -53,3 +53,5 @@ Music: "Monkeys Spinning Monkeys" by Kevin MacLeod (incompetech.com), licensed u
 - `voice_pig.mp3`: "Pig Oink" by qubodup (Freesound, CC0 1.0) https://freesound.org/people/qubodup/sounds/442906/
 - `waterfall.mp3`: "Waterfall 01 (loop).MP3" by VKProduktion (Freesound, CC0 1.0) https://freesound.org/people/VKProduktion/sounds/215712/
 - `whistle.mp3`: "Referee whistle blow, gymnasium.wav" by SpliceSound (Freesound, CC0 1.0) https://freesound.org/people/SpliceSound/sounds/218318/
+- `whoosh.mp3`: "Swing Woosh" by Jofae (Freesound, CC0 1.0) https://freesound.org/people/Jofae/sounds/389590/
+- `whoosh2.mp3`: "Swinging staff whoosh (strong) 04.wav" by Nightflame (Freesound, CC0 1.0) https://freesound.org/people/Nightflame/sounds/422513/

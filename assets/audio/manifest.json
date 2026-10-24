@@ -185,6 +185,14 @@
   "voice_capybara": {
    "file": "voice_capybara.mp3",
    "dur": 1.09
+  },
+  "whoosh": {
+   "file": "whoosh.mp3",
+   "dur": 0.22
+  },
+  "whoosh2": {
+   "file": "whoosh2.mp3",
+   "dur": 0.21
   }
  },
  "loops": {

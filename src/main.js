@@ -265,6 +265,7 @@ function triggerWipe(why) {
 }
 
 function beginWipe(m) {
+  G.slowmo = 1;
   G.wiping = { wt: m.wt || G.net.serverNow(), why: m.why || '', cp: m.wcp || 0, reset: false, popped: false };
   G.me.fart = false;
   sound.play('wipe');
@@ -561,7 +562,17 @@ function handleEvent(e) {
     case 'fartEnd': if (Math.random() < 0.35) voice(G.profile.animal, 0.95 + Math.random() * 0.2, 0, 120); break;
     case 'fartEmpty': sound.play('empty'); break;
     case 'knocked': sound.play('knock'); voice(G.profile.animal, 1.45); G.shake = Math.max(G.shake, 0.4); break;
-    case 'kick': G.shake = Math.max(G.shake, 0.14); cam.kick = 1; break;
+    case 'kick': {
+      G.shake = Math.max(G.shake, 0.14);
+      cam.kick = 1;
+      const who = e.id === G.net.selfId || e.id === 'me' ? G.me : G.remotes.get(e.id)?.st;
+      if (who) {
+        const w = worldOf(who);
+        const fa = (who.f || 0) + R.a;
+        fx.burst(w.x, R.y + 0.1, w.z, Math.sin(fa), Math.cos(fa), R.y);
+      }
+      break;
+    }
     case 'fell': {
       G.stats.falls++;
       const w = worldOf(G.me);
@@ -658,6 +669,32 @@ function updateViews(dt, now) {
   if (anyToot && G.bubbleT < 0) { G.bubbleT = 0.06 + Math.random() * 0.12; sound.play('bubble'); }
 
   const wake = Math.hypot(R.vx, R.vz);
+  if (wake > 3 && (G.mode === 'run' || G.mode === 'done')) fx.speedSpray(R.x, R.y, R.z, R.vx, R.vz, Math.min(1, (wake - 3) / 4) * dt * 30);
+  if ((G.mode === 'run' || G.mode === 'done') && !G.wiping) {
+    if ((G.lastS || 0) < 661 && R.s >= 661 && R.s < 680) {
+      fx.splash(R.x, R.y, R.z, 70, 7, 5);
+      sound.play('splash', { vol: 1.2 });
+      G.shake = Math.max(G.shake, 0.7);
+      cam.kick = 1.5;
+    }
+    if ((R.cur || 0) > 2.6) G.shake = Math.max(G.shake, 0.06 + Math.random() * 0.05);
+    for (const h of haz.sweepers) {
+      if (Math.abs(h.s - R.s) > 14) continue;
+      for (let k = 0; k < h.arms; k++) {
+        const a = haz.sweeperAngle(h, G.T, k);
+        const tx = h.x + Math.cos(a) * h.len * 0.7, tz = h.z + Math.sin(a) * h.len * 0.7;
+        const d = Math.hypot(tx - R.x, tz - R.z);
+        const key = h.s * 10 + k;
+        const lastW = G.whoosh?.get(key) || 0;
+        if (d < 3.2 && G.T - lastW > 1.2) {
+          (G.whoosh ||= new Map()).set(key, G.T);
+          tmpV.set(tx, R.y + 0.7, tz).project(camera);
+          sound.play('whoosh', { pan: tmpV.x * 0.8, vol: 1.3 });
+        }
+      }
+    }
+  }
+  G.lastS = R.s;
   G.wakeT = (G.wakeT || 0) + dt * Math.min(1.5, wake * 0.4);
   if (G.wakeT > 1 && (G.mode === 'run' || G.mode === 'done')) { G.wakeT = 0; fx.wake(R.x - R.vx * 0.4, R.y, R.z - R.vz * 0.4); }
 
@@ -825,11 +862,13 @@ function frame() {
   if (n === 8) acc = 0;
   pressed.clear();
   updateWipe(dt, now);
-  updateViews(dt, now);
+  G.slowmo = Math.max(0, (G.slowmo || 0) - dt * 1.6);
+  const vdt = dt * (1 - Math.min(1, G.slowmo * 1.3) * 0.75);
+  updateViews(vdt, now);
   updateCamera(dt);
   hazViews.update(G.T, dt, performance.now() / 1000, G.raft.s);
   world.update(dt, tmpV.set(G.raft.x, G.raft.y, G.raft.z), camera, G.raft.s);
-  fx.update(dt);
+  fx.update(vdt);
   updateHud(dt, now);
   sendNet(now);
   if (sound.ctx) {

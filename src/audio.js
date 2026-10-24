@@ -465,6 +465,7 @@ export class Sound {
       case 'click': S('click', { vol: 0.6 * v }); return true;
       case 'geyser': S('geyser', { vol: 0.7 * v, rate: r(0.95, 1.08) }); return true;
       case 'wipe': S('sad', { vol: 0.55 * v }); return true;
+      case 'whoosh': S(Math.random() < 0.5 ? 'whoosh' : 'whoosh2', { vol: 0.75 * v, rate: r(0.85, 1.1) }); return true;
       case 'barrier': S('bump1', { vol: 0.5 * v, rate: r(1.3, 1.5) }); return true;
       case 'blub': S('splash_dive', { vol: 0.7 * v, rate: r(0.95, 1.1) }); S('bubbles_small', { vol: 0.4 * v, delay: 0.08 }); return true;
       case 'surface': S('splash_tiny', { vol: 0.7 * v, rate: r(0.95, 1.15) }); return true;

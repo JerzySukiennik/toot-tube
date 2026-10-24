@@ -252,6 +252,30 @@ export class FX {
     }
   }
 
+  burst(x, y, z, fx, fz, waterY) {
+    for (let i = 0; i < 26; i++) {
+      const a = (Math.random() - 0.5) * 1.6, sp = 4 + Math.random() * 4;
+      const c = Math.cos(a), s = Math.sin(a);
+      const dx = -(fx * c - fz * s), dz = -(fz * c + fx * s);
+      this.gas.emit(x, y + Math.random() * 0.2, z, dx * sp, 0.6 + Math.random() * 1.6, dz * sp, 0.8 + Math.random() * 0.7, 0.4, 1.7 + Math.random() * 0.8, Math.random() * 0.6);
+    }
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 2.5;
+      this.spray.emit(x - fx * 0.3, waterY + 0.05, z - fz * 0.3, Math.cos(a) * sp - fx * 2, 2 + Math.random() * 3, Math.sin(a) * sp - fz * 2, 0.6 + Math.random() * 0.3, 0.2, 0.08);
+    }
+    this.rings.add(x - fx * 0.6, waterY, z - fz * 0.6, 2.4, 1.2);
+  }
+
+  speedSpray(x, y, z, vx, vz, k) {
+    const sp = Math.hypot(vx, vz) || 1;
+    const nx = vx / sp, nz = vz / sp;
+    for (const side of [-1, 1]) {
+      if (Math.random() > k) continue;
+      const px = x + nx * 1.9 - nz * side * 1.2, pz = z + nz * 1.9 + nx * side * 1.2;
+      this.spray.emit(px, y + 0.05, pz, -nz * side * (1.5 + Math.random() * 2) + vx * 0.3, 1.2 + Math.random() * 1.8, nx * side * (1.5 + Math.random() * 2) + vz * 0.3, 0.45 + Math.random() * 0.3, 0.16, 0.06);
+    }
+  }
+
   puff(x, y, z, fx, fz) {
     for (let i = 0; i < 5; i++) this.gas.emit(x, y, z, -fx * 1.5 + (Math.random() - 0.5), 0.3, -fz * 1.5 + (Math.random() - 0.5), 0.6, 0.2, 0.7, 0.8);
   }
