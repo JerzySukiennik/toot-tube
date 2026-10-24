@@ -436,6 +436,10 @@ export class Sound {
       case 'whoosh':
         this.noise(t, 0.35, { type: 'bandpass', f0: 600, f1: 1600, q: 1.5, vol: 0.18 * v, attack: 0.08, pan });
         break;
+      case 'fallwhistle':
+        this.tone(t, 1.5, { type: 'sine', f0: 1700, f1: 220, vol: 0.16 * v, pan });
+        this.tone(t, 1.5, { type: 'triangle', f0: 1720, f1: 230, vol: 0.05 * v, pan });
+        break;
       case 'wipe':
         this.tone(t, 0.6, { type: 'triangle', f0: 392, f1: 196, vol: 0.14 * v, curve: 'lin' });
         this.tone(t + 0.25, 0.7, { type: 'triangle', f0: 330, f1: 147, vol: 0.12 * v, curve: 'lin' });

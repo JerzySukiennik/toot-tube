@@ -576,11 +576,27 @@ function handleEvent(e) {
     case 'fell': {
       G.stats.falls++;
       const w = worldOf(G.me);
-      fx.splash(w.x, R.y, w.z, 40, 5, 3);
-      sound.play('splash');
+      if (outsideChannel(w.x, w.z)) {
+        G.voidFall = { y: G.me.y, vy: -1 };
+        sound.play('fallwhistle');
+      } else {
+        fx.splash(w.x, R.y, w.z, 40, 5, 3);
+        sound.play('splash');
+      }
       break;
     }
   }
+}
+
+function outsideChannel(x, z) {
+  const L = track.locate(x, z, G.raft.hint);
+  return Math.abs(L.lat) > L.hw + 0.25;
+}
+
+function fallStep(vf, dt) {
+  vf.vy -= 14 * dt;
+  vf.y += vf.vy * dt;
+  return vf.y > -60;
 }
 
 const _w = { x: 0, z: 0 };
@@ -601,12 +617,15 @@ function updateViews(dt, now) {
   const me = G.me, mv = G.meView;
   mv.root.position.set(me.x, me.y, me.z);
   mv.root.rotation.y = me.f;
-  mv.root.visible = !(me.mode === 'fallen');
+  if (me.mode !== 'fallen') G.voidFall = null;
+  if (G.voidFall && fallStep(G.voidFall, dt)) mv.root.position.y = G.voidFall.y;
+  mv.root.visible = me.mode !== 'fallen' || (!!G.voidFall && G.voidFall.y > -60);
   mv.animate({ speed: me.speed, walkPhase: me.walkPhase, dir: Math.sign(me.vphi) * (Math.abs(me.vphi) > 0.1 ? 1 : 0), fart: me.fart, duck: me.duck, mode: me.mode }, dt);
 
   for (const [id, r] of G.remotes) {
     const st = r.st;
-    r.view.root.visible = !!st && !(st.m & 8);
+    if (!(st?.m & 8)) r.voidFall = null;
+    r.view.root.visible = !!st && (!(st.m & 8) || (!!r.voidFall && r.voidFall.y > -60));
     if (!st) { sound.setVoice(id, ANIMAL_INFO[r.animal].pitch, false); continue; }
     r.view.root.position.set(st.x, st.y, st.z);
     r.view.root.rotation.y = st.f;
@@ -622,9 +641,10 @@ function updateViews(dt, now) {
     r.view.animate({ speed: r.speed, walkPhase: r.phase, dir: r.speed > 0.3 ? Math.sign(r.dir) : 0, fart: !!(st.m & 2), duck: !!(st.m & 16), mode: st.m & 4 ? 'knocked' : fallen ? 'fallen' : 'ok' }, dt);
     if (fallen && !r.wasFallen) {
       r.view.root.getWorldPosition(tmpV);
-      fx.splash(tmpV.x, R.y, tmpV.z, 40, 5, 3);
-      sound.play('splash', { vol: 0.8 });
+      if (outsideChannel(tmpV.x, tmpV.z)) { r.voidFall = { y: st.y, vy: -1 }; sound.play('fallwhistle', { vol: 0.8 }); }
+      else { fx.splash(tmpV.x, R.y, tmpV.z, 40, 5, 3); sound.play('splash', { vol: 0.8 }); }
     }
+    if (fallen && r.voidFall && fallStep(r.voidFall, dt)) r.view.root.position.y = r.voidFall.y;
     r.wasFallen = fallen;
     const tooting = !!(st.m & 2);
     if (r.fartOn && !tooting && Math.random() < 0.3) voice(r.animal, 0.95 + Math.random() * 0.2, 0, 120);
